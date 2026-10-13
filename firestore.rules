@@ -1,0 +1,53 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =========================================================================
+    // DENY-BY-DEFAULT
+    // All requests are denied unless explicitly permitted below.
+    // =========================================================================
+
+    // =========================================================================
+    // users/{uid} — User profiles and user's private reports
+    // =========================================================================
+    match /users/{uid} {
+      // A signed-in user may read and update only their own profile document.
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+
+      // Subcollection: users/{uid}/reports/{reportId}
+      // Strictly private: only this user can read, create, update, or delete their own reports.
+      match /reports/{reportId} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
+    }
+
+    // =========================================================================
+    // reports/{reportId} — Lab reports
+    // =========================================================================
+    match /reports/{reportId} {
+      // A signed-in user may read, update, or delete a report ONLY if they own it.
+      allow read, update, delete: if request.auth != null
+                  && resource.data.ownerUid == request.auth.uid;
+
+      // A signed-in user may create a report if ownerUid matches their authenticated UID.
+      allow create: if request.auth != null
+                  && request.resource.data.ownerUid == request.auth.uid;
+    }
+
+
+    // =========================================================================
+    // _connection_tests — Internal connectivity test collection (dev only).
+    // Consider removing this in production or restricting to admin.
+    // =========================================================================
+    match /_connection_tests/{docId} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // Everything else — deny all
+    // =========================================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

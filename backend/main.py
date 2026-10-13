@@ -4,24 +4,30 @@ Reportly Healthcare Hackathon Backend API (Aayu 2026 - Problem Statement T02)
 Team: Ctrl Alt Win
 Tagline: We simplify the report. We connect the dots.
 
-Features:
-- Deterministic reference-range classification (AI never classifies status).
-- Safe, non-diagnostic multi-parameter pattern analysis with explicit limitations.
-- High-precision OCR extraction with original source text preservation & evidence tracing.
-- Clinical safety guardrails refusing diagnostic / prescriptive inquiries.
-- Emergency symptom detection directing patients to urgent medical care.
-- Robust file validation (size limits, MIME types, empty check).
-- Graceful offline fallback if cloud APIs are unavailable.
+Security model:
+- Every protected endpoint uses get_current_user() which verifies the Firebase
+  ID token from the Authorization: Bearer header via the Admin SDK.
+- The UID extracted from the verified token is the authoritative identity.
+- No client-supplied UID, email, or ownerUid is ever trusted.
+- Report ownership is enforced on every read, write, and delete operation.
+- Firebase Admin SDK operations in firebase_config.py enforce ownership too.
 """
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Header, Form
+from fastapi import FastAPI, File, UploadFile, HTTPException, Header, Form, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 import google.generativeai as genai
 from rapidocr_onnxruntime import RapidOCR
 from PIL import Image
 import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR / ".env")
+
 import re
 import json
 import tempfile
@@ -32,7 +38,14 @@ from classifier import classify_status, normalize_unit, STATUS_WITHIN_RANGE, STA
 from patterns import analyze_patterns_safely
 from ocr_extractor import parse_ocr_blocks, CBC_DEFINITIONS
 from datetime import datetime, timezone
-from firebase_config import db, is_firebase_available, save_report_summary, get_report_summary
+from firebase_config import (
+    db, is_firebase_available,
+    verify_firebase_token,
+    create_or_update_user_profile, get_user_profile,
+    save_report_for_user, get_report_for_user, get_user_reports, delete_report_for_user,
+    # Legacy helpers kept for existing tests
+    save_report_summary, get_report_summary,
+)
 
 app = FastAPI(
     title="Reportly API",
@@ -40,23 +53,77 @@ app = FastAPI(
     version="2.0.0"
 )
 
-# CORS Configuration
-ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "*").split(",")
+# ---------------------------------------------------------------------------
+# CORS — restrict to configured origins in production
+# ---------------------------------------------------------------------------
+ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS if ALLOWED_ORIGINS != ["*"] else ["*"],
+    allow_origins=[o.strip() for o in ALLOWED_ORIGINS],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Initialize local RapidOCR engine
+# ---------------------------------------------------------------------------
+# Engines and constants
+# ---------------------------------------------------------------------------
 ocr_engine = RapidOCR()
-
 DEFAULT_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
-MAX_UPLOAD_SIZE = 15 * 1024 * 1024  # 15 MB limit
+MAX_UPLOAD_SIZE = 15 * 1024 * 1024  # 15 MB
 SUPPORTED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".webp"}
 
+# ---------------------------------------------------------------------------
+# Authentication dependency
+# ---------------------------------------------------------------------------
+bearer_scheme = HTTPBearer(auto_error=False)
+
+
+async def get_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+) -> Dict[str, Any]:
+    """
+    FastAPI dependency that verifies the Firebase ID token from the
+    Authorization: Bearer <token> header.
+
+    Returns the decoded token dict (uid, email, ...) on success.
+    Raises HTTP 401 for missing or invalid tokens.
+
+    NEVER accepts a client-supplied UID — always uses Admin SDK verification.
+    """
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required. Please sign in and include a valid Bearer token.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    decoded = verify_firebase_token(credentials.credentials)
+    if decoded is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid, expired, or revoked authentication token. Please sign in again.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return decoded
+
+
+async def get_optional_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+) -> Optional[Dict[str, Any]]:
+    """
+    Optional auth dependency — returns decoded token if present and valid,
+    None if missing. Used for endpoints that work for both authed and anon users.
+    """
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        return None
+    return verify_firebase_token(credentials.credentials)
+
+
+# ---------------------------------------------------------------------------
+# Gemini Vision prompt
+# ---------------------------------------------------------------------------
 GEMINI_VISION_PROMPT = """
 You are a precise clinical laboratory report extractor specializing strictly in Complete Blood Count (CBC) reports.
 Analyze the provided medical laboratory report and extract EVERY tested CBC parameter.
@@ -121,6 +188,10 @@ def calculate_report_summary(parameters: List[Dict[str, Any]]) -> Dict[str, int]
     }
 
 
+# ---------------------------------------------------------------------------
+# Health check (public)
+# ---------------------------------------------------------------------------
+
 @app.get("/api/health")
 async def health_check():
     return {
@@ -132,11 +203,98 @@ async def health_check():
     }
 
 
+# ---------------------------------------------------------------------------
+# User profile endpoints (protected)
+# ---------------------------------------------------------------------------
+
+class CreateProfileRequest(BaseModel):
+    displayName: str
+    phoneNumber: Optional[str] = None
+    gender: Optional[str] = None
+    age: Optional[Union[int, str]] = None
+
+
+@app.post("/api/users/profile")
+async def create_user_profile(
+    body: CreateProfileRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """
+    Creates or updates the Firestore profile for the authenticated user.
+    uid and email come from the verified Firebase token — not the request body.
+    """
+    uid = current_user["uid"]
+    email = current_user.get("email", "")
+    display_name = body.displayName.strip()
+
+    if not display_name:
+        raise HTTPException(status_code=400, detail="displayName cannot be empty.")
+
+    ok = create_or_update_user_profile(
+        uid=uid,
+        email=email,
+        display_name=display_name,
+        phone_number=body.phoneNumber or "",
+        gender=body.gender or "",
+        age=body.age,
+    )
+    if not ok:
+        raise HTTPException(status_code=503, detail="Profile service temporarily unavailable.")
+
+    return get_user_profile(uid) or {
+        "success": True,
+        "uid": uid,
+        "displayName": display_name,
+        "phoneNumber": body.phoneNumber,
+        "gender": body.gender,
+        "age": body.age,
+    }
+
+
+@app.put("/api/users/profile")
+async def update_user_profile(
+    body: CreateProfileRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Updates profile attributes (name, phone, gender, age) for authenticated user."""
+    return await create_user_profile(body, current_user)
+
+
+@app.get("/api/users/profile")
+async def get_profile(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Returns the Firestore profile for the authenticated user."""
+    uid = current_user["uid"]
+
+    # Try to get stored profile
+    profile = get_user_profile(uid)
+    if profile:
+        return profile
+
+    # Profile doesn't exist yet — auto-create from token claims
+    email = current_user.get("email", "")
+    name = current_user.get("name") or email.split("@")[0] or "User"
+    create_or_update_user_profile(uid=uid, email=email, display_name=name)
+    return get_user_profile(uid) or {"uid": uid, "email": email, "displayName": name}
+
+
+
+# ---------------------------------------------------------------------------
+# Report upload (supports both authenticated and unauthenticated)
+# ---------------------------------------------------------------------------
+
 @app.post("/api/upload")
 async def upload_report(
     file: UploadFile = File(...),
-    x_gemini_api_key: Optional[str] = Header(None)
+    x_gemini_api_key: Optional[str] = Header(None),
+    current_user: Optional[Dict[str, Any]] = Depends(get_optional_user),
 ):
+    """
+    Processes an uploaded CBC report.
+    - Works for both authenticated and unauthenticated users.
+    - If authenticated, saves the report to Firestore with ownerUid from the
+      verified token (never from client-supplied data).
+    - Existing OCR/Gemini analysis pipeline is unchanged.
+    """
     active_key = x_gemini_api_key or DEFAULT_API_KEY
 
     # 1. Validate file extension
@@ -152,7 +310,7 @@ async def upload_report(
     suffix = ext if ext else ".jpg"
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
         file_size = 0
-        chunk_size = 1024 * 1024  # 1MB chunks
+        chunk_size = 1024 * 1024  # 1 MB chunks
         while True:
             chunk = await file.read(chunk_size)
             if not chunk:
@@ -179,15 +337,15 @@ async def upload_report(
         patient_metadata = {"name": "Patient", "age": "N/A", "gender": "N/A", "lab_name": "Decoded Lab Report", "date": ""}
         extraction_source = "RapidOCR Engine"
 
-        # PATH 1: Real Gemini Multimodal Vision API (if API key available)
+        # PATH 1: Gemini Multimodal Vision API (if API key available)
         if active_key:
             try:
                 genai.configure(api_key=active_key)
-                vision_model = genai.GenerativeModel("gemini-1.5-flash")
-                
+                vision_model = genai.GenerativeModel("gemini-flash-latest")
+
                 uploaded_media = genai.upload_file(path=temp_path)
                 response = vision_model.generate_content([uploaded_media, GEMINI_VISION_PROMPT])
-                
+
                 try:
                     uploaded_media.delete()
                 except Exception:
@@ -201,9 +359,8 @@ async def upload_report(
 
                 parsed_json = json.loads(response_text)
                 patient_metadata.update(parsed_json.get("patient_metadata", {}))
-                
+
                 # ENFORCE DETERMINISTIC RULE-BASED RANGE CLASSIFICATION
-                # The LLM is never allowed to determine status!
                 for raw_param in parsed_json.get("parameters", []):
                     classification = classify_status(
                         value_raw=raw_param.get("value"),
@@ -244,24 +401,42 @@ async def upload_report(
 
                 extraction_source = "Gemini Vision with Deterministic Rule Validation"
             except Exception as gemini_err:
-                print(f"Gemini API attempt error: {gemini_err}. Gracefully falling back to RapidOCR.")
+                print(f"Gemini API attempt error: {gemini_err}. Falling back to RapidOCR.")
 
-        # PATH 2: Local RapidOCR Engine (No API key needed / fallback)
+        # PATH 2: Local RapidOCR Engine (fallback)
         if not parameters:
-            # Handle images or PDF conversion
             ocr_results = None
             if ext == ".pdf":
                 try:
-                    from pdf2image import convert_from_path
-                    images = convert_from_path(temp_path, first_page=1, last_page=1)
-                    if images:
-                        page_path = temp_path + "_page1.png"
-                        images[0].save(page_path, "PNG")
-                        ocr_results, _ = ocr_engine(page_path)
+                    import pypdfium2 as pdfium
+                    pdf = pdfium.PdfDocument(temp_path)
+                    ocr_results = []
+                    max_pages = min(len(pdf), 3)
+                    for page_idx in range(max_pages):
+                        page = pdf[page_idx]
+                        pil_img = page.render(scale=2).to_pil()
+                        page_path = f"{temp_path}_page{page_idx}.png"
+                        pil_img.save(page_path, "PNG")
+                        page_results, _ = ocr_engine(page_path)
+                        if page_results:
+                            ocr_results.extend(page_results)
                         if os.path.exists(page_path):
                             os.remove(page_path)
-                except Exception as pdf_err:
-                    print(f"pdf2image conversion error: {pdf_err}. Attempting direct file read.")
+                except Exception as pdfium_err:
+                    print(f"pypdfium2 conversion error: {pdfium_err}")
+
+                if not ocr_results:
+                    try:
+                        from pdf2image import convert_from_path
+                        images = convert_from_path(temp_path, first_page=1, last_page=1)
+                        if images:
+                            page_path = temp_path + "_page1.png"
+                            images[0].save(page_path, "PNG")
+                            ocr_results, _ = ocr_engine(page_path)
+                            if os.path.exists(page_path):
+                                os.remove(page_path)
+                    except Exception as pdf_err:
+                        print(f"pdf2image conversion error: {pdf_err}. Attempting direct file read.")
 
             if not ocr_results:
                 try:
@@ -277,13 +452,13 @@ async def upload_report(
         if not parameters:
             return {
                 "error": "Could not extract laboratory parameters from the uploaded document.",
-                "message": "Please ensure the image or PDF is clear, well-lit, and contains a standard CBC laboratory panel. To enable high-accuracy AI Vision extraction, you can also provide a Gemini API Key in the settings."
+                "message": "Please ensure the image or PDF is clear, well-lit, and contains a standard CBC laboratory panel."
             }
 
-        # Analyze Multi-Parameter Patterns Deterministically & Safely
+        # Analyze patterns
         patterns = analyze_patterns_safely(parameters)
 
-        # Standard Doctor Discussion Questions
+        # Standard doctor discussion questions
         questions = [
             "What potential clinical factors could explain any parameters sitting outside the reference interval?",
             "Given these Complete Blood Count results, would you suggest repeating the test in 48-72 hours to evaluate trends?",
@@ -291,7 +466,6 @@ async def upload_report(
             "What warning signs or symptoms should prompt me to seek immediate medical consultation?"
         ]
 
-        # Calculate Verified Summary Counts
         summary_counts = calculate_report_summary(parameters)
 
         p_name = patient_metadata.get("name") or "Patient"
@@ -308,14 +482,26 @@ async def upload_report(
             "parameters": parameters,
             "patterns": patterns,
             "questions": questions,
-            "is_sample": False
+            "is_sample": False,
         }
 
-        # Persist to Firebase if configured
+        # Persist to Firestore if authenticated and Firebase is available
         saved_to_firebase = False
-        if is_firebase_available():
+        if current_user and is_firebase_available():
+            owner_uid = current_user["uid"]  # Always from verified token
+            saved_to_firebase = save_report_for_user(
+                report_id=report_id,
+                owner_uid=owner_uid,
+                report_data=final_data,
+                original_file_name=filename,
+            )
+        elif is_firebase_available() and not current_user:
+            # Unauthenticated upload — save without owner (legacy mode)
             saved_to_firebase = save_report_summary(report_id, final_data)
+
         final_data["saved_to_firebase"] = saved_to_firebase
+        if current_user:
+            final_data["reportId"] = report_id
 
         return final_data
 
@@ -327,16 +513,78 @@ async def upload_report(
                 pass
 
 
+# ---------------------------------------------------------------------------
+# Report history endpoint (protected)
+# ---------------------------------------------------------------------------
+
+@app.get("/api/reports")
+async def list_user_reports(
+    limit: int = 50,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """
+    Returns the authenticated user's report history, ordered by creation time.
+    The query is scoped exclusively to the authenticated UID from the token.
+    """
+    if not is_firebase_available():
+        raise HTTPException(status_code=503, detail="Report history service temporarily unavailable.")
+
+    uid = current_user["uid"]
+    reports = get_user_reports(uid, limit=min(limit, 100))
+    return {"reports": reports, "count": len(reports)}
+
+
+# ---------------------------------------------------------------------------
+# Single report retrieval (protected, ownership-enforced)
+# ---------------------------------------------------------------------------
+
 @app.get("/api/reports/{report_id}")
-async def get_saved_report(report_id: str):
-    """Retrieves a previously stored report by ID from Firestore."""
+async def get_saved_report(
+    report_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """
+    Retrieves a single report by ID.
+    Returns HTTP 404 if the report doesn't exist OR doesn't belong to the
+    authenticated user (to avoid revealing existence of other users' reports).
+    """
     if not is_firebase_available():
         raise HTTPException(status_code=503, detail="Firebase persistence is not available.")
-    report = get_report_summary(report_id)
+
+    uid = current_user["uid"]
+    report = get_report_for_user(report_id, requesting_uid=uid)
     if not report:
-        raise HTTPException(status_code=404, detail="Report not found in database.")
+        # Return 404 regardless of whether the report exists but belongs to another user
+        raise HTTPException(status_code=404, detail="Report not found.")
     return report
 
+
+# ---------------------------------------------------------------------------
+# Delete report (protected, ownership-enforced)
+# ---------------------------------------------------------------------------
+
+@app.delete("/api/reports/{report_id}")
+async def delete_report(
+    report_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """
+    Deletes a report. Only the owner can delete their own reports.
+    Returns 404 if not found or not owned.
+    """
+    if not is_firebase_available():
+        raise HTTPException(status_code=503, detail="Firebase persistence is not available.")
+
+    uid = current_user["uid"]
+    deleted = delete_report_for_user(report_id, requesting_uid=uid)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Report not found.")
+    return {"success": True, "deletedId": report_id}
+
+
+# ---------------------------------------------------------------------------
+# Ask guardrail (public — AI safety layer unchanged)
+# ---------------------------------------------------------------------------
 
 class AskRequest(BaseModel):
     question: str
@@ -346,28 +594,22 @@ class AskRequest(BaseModel):
 
 # Diagnostic & prescriptive intent triggers
 DIAGNOSTIC_TRIGGERS = [
-    # English terms
     "diagnos", "do i have", "am i suffering", "have i got", "is this cancer",
     "leukemia", "tumor", "cure me", "what disease", "which disease",
     "prescribe", "what medicine", "what drug", "can i take", "am i sick",
     "how to treat", "treatment for", "dosage", "tablet", "antibiotic",
     "pill", "medication", "remedy",
-    # Hinglish terms
     "kya mujhe", "bimaari", "bimari", "rog", "kya ye cancer", "dawa", "dawai", "ilaj", "ilaaj", "konsi bimari",
-    # Hindi Devanagari terms
     "क्या मुझे", "बीमारी", "रोग", "कैंसर", "दवा", "दवाई", "इलाज", "एंटीबायोटिक", "गोली", "उपचार", "लक्षण क्या बताते हैं"
 ]
 
 # Red-flag emergency symptoms
 EMERGENCY_TRIGGERS = [
-    # English terms
     "chest pain", "difficulty breathing", "shortness of breath", "fainted",
     "passing out", "unconscious", "coughing blood", "vomiting blood",
     "heavy bleeding", "severe abdominal pain", "stroke", "paralysis", "heart attack",
-    # Hinglish terms
-    "chhati me dard", "chhati mein dard", "seene me dard", "seene mein dard", 
+    "chhati me dard", "chhati mein dard", "seene me dard", "seene mein dard",
     "saans lene me takleef", "saans phool", "behosh", "khoon ki ulti",
-    # Devanagari terms
     "सीने में दर्द", "छाती में दर्द", "सांस लेने में तकलीफ", "सांस फूलना", "बेहोश", "खून की उल्टी", "खून बहना"
 ]
 
@@ -375,7 +617,7 @@ EMERGENCY_TRIGGERS = [
 @app.post("/api/ask")
 async def ask_guardrail(
     request: AskRequest,
-    x_gemini_api_key: Optional[str] = Header(None)
+    x_gemini_api_key: Optional[str] = Header(None),
 ):
     q_lower = request.question.lower().strip()
     is_hindi = request.language == "hi"
@@ -444,9 +686,8 @@ async def ask_guardrail(
     if active_key and request.context:
         try:
             genai.configure(api_key=active_key)
-            model = genai.GenerativeModel("gemini-1.5-flash")
+            model = genai.GenerativeModel("gemini-flash-latest")
 
-            # Extract compact parameter context
             context_summary = []
             for p in request.context.get("parameters", [])[:10]:
                 context_summary.append(f"{p.get('name')}: {p.get('value')} {p.get('unit')} (Range: {p.get('range')}, Status: {p.get('status')})")

@@ -6,11 +6,26 @@ frontend/dist/
 frontend/dist-ssr/
 *.pyc
 *.pyo
+
+# Environment files — NEVER commit real credentials
 .env
 .env.local
 *.local
+
+# Logs
 logs
 *.log
+
+# macOS
 .DS_Store
-# Firebase private credentials
+
+# Firebase private credentials — CRITICAL: never commit these
 **/serviceAccountKey.json
+**/firebase-adminsdk-*.json
+**/*.service-account.json
+
+# Firebase emulator data
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
