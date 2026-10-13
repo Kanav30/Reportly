@@ -55,12 +55,25 @@ app = FastAPI(
 )
 
 # ---------------------------------------------------------------------------
-# CORS — restrict to configured origins in production
+# CORS — allow local development (localhost) and production (Render)
 # ---------------------------------------------------------------------------
-ALLOWED_ORIGINS = os.environ.get("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
+DEFAULT_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "https://reportly-frontend.onrender.com",
+    "https://reportly-backend-9xug.onrender.com",
+]
+env_origins = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+ALLOWED_ORIGINS = list(dict.fromkeys(DEFAULT_ALLOWED_ORIGINS + env_origins))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[o.strip() for o in ALLOWED_ORIGINS],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"^https://.*\.onrender\.com$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

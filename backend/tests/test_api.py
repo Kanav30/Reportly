@@ -112,3 +112,38 @@ async def test_firebase_persistence_endpoints():
             data = res.json()
             assert data["title"] == "E2E Test Report"
             assert data["id"] == test_id
+
+
+@pytest.mark.asyncio
+async def test_cors_allows_localhost_and_render_domains():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        # Test localhost origin
+        res_local = await client.options(
+            "/api/health",
+            headers={
+                "Origin": "http://localhost:5173",
+                "Access-Control-Request-Method": "GET"
+            }
+        )
+        assert res_local.headers.get("access-control-allow-origin") == "http://localhost:5173"
+
+        # Test deployed Render frontend origin
+        res_render = await client.options(
+            "/api/health",
+            headers={
+                "Origin": "https://reportly-frontend.onrender.com",
+                "Access-Control-Request-Method": "GET"
+            }
+        )
+        assert res_render.headers.get("access-control-allow-origin") == "https://reportly-frontend.onrender.com"
+
+        # Test deployed Render backend self-origin
+        res_backend = await client.options(
+            "/api/health",
+            headers={
+                "Origin": "https://reportly-backend-9xug.onrender.com",
+                "Access-Control-Request-Method": "GET"
+            }
+        )
+        assert res_backend.headers.get("access-control-allow-origin") == "https://reportly-backend-9xug.onrender.com"
+
