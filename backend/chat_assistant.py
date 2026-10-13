@@ -132,7 +132,7 @@ def generate_semantic_response(question: str, language: str, context: Optional[D
         return {"refusal": False, "is_emergency": False, "guardrail_triggered": None, "message": msg, "suggested_questions": questions}
 
     # 2. RED BLOOD CELLS (RBC)
-    if any(k in q_lower for k in ["what are rbc", "what is rbc", "rbc count", "red blood cell", "red cell", "erythrocyte", "लाल रक्त", "खून की कोशिका"]):
+    if re.search(r"\brbcs?\b", q_lower) or any(k in q_lower for k in ["what are rbc", "what is rbc", "rbc count", "red blood cell", "red blood count", "red cell", "erythrocyte", "लाल रक्त", "खून की कोशिका"]):
         p = find_parameter_in_context("RBC", context)
         context_note_en = ""
         context_note_hi = ""
@@ -525,6 +525,90 @@ def generate_semantic_response(question: str, language: str, context: Optional[D
             questions = [
                 "What clinical symptoms should I monitor in connection with these flagged markers?",
                 "What timeline do you recommend for repeating this lab test to monitor trends?"
+            ]
+        return {"refusal": False, "is_emergency": False, "guardrail_triggered": None, "message": msg, "suggested_questions": questions}
+
+    # 13B. OUT OF RANGE / ABNORMAL / REFERENCE INTERVALS
+    if any(k in q_lower for k in ["out of range", "abnormal", "reference range", "reference interval", "what does high mean", "what does low mean", "flagged", "असामान्य", "संदर्भ सीमा"]):
+        if is_hindi:
+            msg = (
+                f"**लैब रेफरेंस रेंज, 'High' (उच्च) और 'Low' (कम) का सही अर्थ:**\n\n"
+                f"प्रयोगशाला की संदर्भ सीमा (Reference Range) 95% स्वस्थ व्यक्तियों के सांख्यिकीय औसत आंकड़ों पर आधारित होती है:\n"
+                f"• **हाई (High):** मान ऊपरी सीमा से अधिक है। यह किसी गंभीर बीमारी का निश्चित संकेत नहीं है; यह निर्जलीकरण (कम पानी पीना), हालिया व्यायाम, तनाव या शरीर की स्वाभाविक रोग प्रतिरोधक प्रतिक्रिया के कारण हो सकता है।\n"
+                f"• **लो (Low):** मान निचली सीमा से कम है। यह अक्सर पोषण संबंधी कारकों (जैसे आयरन, B12), हालिया वायरल बीमारी के बाद की रिकवरी या शारीरिक भिन्नता से संबंधित होता है।\n"
+                f"• **क्लीनिकल समझ:** डॉक्टर कभी भी किसी एक नंबर को अलग से नहीं देखते। वे आपके शारीरिक लक्षणों और स्वास्थ्य इतिहास के साथ मिलाकर ही इसका विश्लेषण करते हैं।"
+            )
+            questions = [
+                "क्या मेरे इन असामान्य परिणामों के पीछे कोई अस्थायी कारण (जैसे निर्जलीकरण या हालिया संक्रमण) हो सकता है?",
+                "क्या मुझे किसी अनुवर्ती जांच की आवश्यकता है?"
+            ]
+        else:
+            msg = (
+                f"**Understanding Laboratory Reference Ranges, 'High', and 'Low' Flags:**\n\n"
+                f"A laboratory reference range represents the expected statistical interval for 95% of a healthy reference population tested using the same equipment and method:\n"
+                f"• **High (Elevated):** The reading sits above the statistical upper bound. This does not automatically indicate pathology; temporary factors like dehydration (hemoconcentration), vigorous exertion, stress, or normal immune defense frequently elevate cell counts.\n"
+                f"• **Low (Decreased):** The reading sits below the lower bound. This is often associated with nutritional factors (iron, ferritin, B12), post-viral recovery periods, or individual baseline variation.\n"
+                f"• **Clinical Principle:** Physicians treat patients, not numbers. A slightly out-of-range value is a clinical clue evaluated alongside your symptoms, timeline, and physical examination."
+            )
+            questions = [
+                "Could temporary lifestyle or hydration factors explain these out-of-range numbers?",
+                "What timeline do you advise for repeating this CBC to monitor whether the level is stable?"
+            ]
+        return {"refusal": False, "is_emergency": False, "guardrail_triggered": None, "message": msg, "suggested_questions": questions}
+
+    # 13C. DOCTOR DISCUSSION / WHAT TO ASK
+    if any(k in q_lower for k in ["ask my doctor", "ask doctor", "questions for doctor", "डॉक्टर से क्या पूछें"]):
+        if is_hindi:
+            msg = (
+                f"**अपने डॉक्टर से सीबीसी रिपोर्ट पर चर्चा करने के लिए मुख्य सुझाव:**\n\n"
+                f"अपने चिकित्सक के साथ परामर्श करते समय ये 4 प्रमुख बिंदु सबसे उपयोगी रहते हैं:\n"
+                f"1. *'क्या मेरी असामान्य रीडिंग मेरे वर्तमान लक्षणों (जैसे थकान या बुखार) से मेल खाती हैं?'*\n"
+                f"2. *'क्या मुझे कोई फॉलो-अप टेस्ट (जैसे सीरम फेरिटिन या सीआरपी) कराने की सलाह देंगे?'*\n"
+                f"3. *'क्या खानपान या पानी की मात्रा से इन स्तरों को संतुलित करने में मदद मिलेगी?'*\n"
+                f"4. *'प्रगति की निगरानी के लिए यह टेस्ट दोबारा कब दोहराना चाहिए?'*"
+            )
+            questions = [
+                "क्या मेरे वर्तमान लक्षण इन लैब परिणामों से सीधे संबंधित हैं?",
+                "क्या मुझे किसी अन्य विशिष्ट जांच की आवश्यकता है?"
+            ]
+        else:
+            msg = (
+                f"**Top Strategic Questions for Your Doctor Regarding Your CBC Report:**\n\n"
+                f"When discussing your laboratory panel with your physician, focus on clinical correlation:\n"
+                f"1. *'Do any out-of-range markers correlate directly with how I have been feeling physically?'*\n"
+                f"2. *'Could temporary lifestyle, hydration, or recent viral illness have influenced these results?'*\n"
+                f"3. *'Would an adjunctive test (such as ferritin, iron saturation, or CRP) provide helpful clarity?'*\n"
+                f"4. *'What timeline do you recommend for repeating this CBC to confirm stability?'*"
+            )
+            questions = [
+                "How do these laboratory results fit into my overall health baseline?",
+                "Are there specific warning signs I should watch out for between now and follow-up?"
+            ]
+        return {"refusal": False, "is_emergency": False, "guardrail_triggered": None, "message": msg, "suggested_questions": questions}
+
+    # 13D. FASTING & TEST PREPARATION
+    if any(k in q_lower for k in ["fasting", "fast", "empty stomach", "bhukhe pet", "भूखे पेट", "उपवास", "prep"]):
+        if is_hindi:
+            msg = (
+                f"**क्या सीबीसी (CBC) टेस्ट के लिए भूखे पेट (Fasting) रहना जरूरी है?**\n\n"
+                f"• **सीबीसी के लिए फास्टिंग आवश्यक नहीं:** सामान्य कम्प्लीट ब्लड काउंट टेस्ट के लिए फास्टिंग की आवश्यकता नहीं होती। आप सामान्य रूप से भोजन कर सकते हैं।\n"
+                f"• **पानी पीना लाभदायक है:** टेस्ट से पहले पर्याप्त पानी पीना बहुत जरूरी है। डिहाइड्रेशन (पानी की कमी) से रक्त गाढ़ा हो जाता है जिससे हीमोग्लोबिन और हेमाटोक्रिट कृत्रिम रूप से बढ़े हुए दिख सकते हैं।\n"
+                f"• **संयुक्त टेस्ट:** यदि सीबीसी के साथ लिपिड प्रोफाइल (कोलेस्ट्रॉल) या फास्टिंग ब्लड शुगर भी कराया जा रहा है, तो 8-12 घंटे का उपवास आवश्यक हो सकता है।"
+            )
+            questions = [
+                "क्या मेरे इस टेस्ट के साथ कोई अन्य जांच (जैसे शुगर या लिपिड) भी जुड़ी हुई थी?",
+                "टेस्ट से पहले पानी पीने के क्या दिशा-निर्देश होने चाहिए?"
+            ]
+        else:
+            msg = (
+                f"**Fasting Guidelines & Preparation for a Complete Blood Count (CBC):**\n\n"
+                f"• **Fasting is generally NOT required:** A standalone CBC measures cellular components (RBCs, WBCs, Platelets) which do not change immediately following a standard meal.\n"
+                f"• **Drink Plenty of Water:** Hydration is strongly recommended. Dehydration shrinks plasma volume and artificially inflates cell concentrations (relative hemoconcentration).\n"
+                f"• **Combined Lab Panels:** If your CBC is ordered alongside a lipid profile, metabolic panel, or fasting glucose, an 8 to 12-hour fast may be required for those specific tests."
+            )
+            questions = [
+                "Were other fasting-sensitive tests ordered alongside this CBC?",
+                "What hydration routine do you recommend before future lab draws?"
             ]
         return {"refusal": False, "is_emergency": False, "guardrail_triggered": None, "message": msg, "suggested_questions": questions}
 
