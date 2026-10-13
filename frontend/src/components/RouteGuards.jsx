@@ -41,9 +41,13 @@ export const ProtectedRoute = ({ children }) => {
 
 export const PublicRoute = ({ children }) => {
   const { currentUser, authLoading, isFirebaseConfigured } = useAuth();
+  const location = useLocation();
 
   if (authLoading) return <AuthLoadingScreen />;
-  if (isFirebaseConfigured && currentUser) return <Navigate to="/dashboard" replace />;
+  // If already logged in, redirect away from /register or /forgot-password, but allow /login so user can sign in with another account
+  if (isFirebaseConfigured && currentUser && location.pathname !== '/login') {
+    return <Navigate to="/dashboard" replace />;
+  }
   return children;
 };
 

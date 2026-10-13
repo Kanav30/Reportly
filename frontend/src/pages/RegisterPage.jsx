@@ -128,17 +128,10 @@ const RegisterPage = () => {
         role: 'patient',
       };
 
-      // Step 2: Save directly to Firestore users/{uid}
+      // Step 2: Create profile via trusted authenticated backend (Admin SDK)
       try {
-        await saveUserProfileToFirestore(firebaseUser.uid, profilePayload);
-      } catch (fsErr) {
-        console.warn('[Reportly] Direct Firestore profile creation fallback:', fsErr);
-      }
-
-      // Step 3: Also sync to FastAPI backend if available
-      try {
-        const token = await firebaseUser.getIdToken(false);
-        await fetch(`${API_BASE_URL}/api/users/profile`, {
+        const token = await firebaseUser.getIdToken(true);
+        const res = await fetch(`${API_BASE_URL}/api/users/profile`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -146,8 +139,12 @@ const RegisterPage = () => {
           },
           body: JSON.stringify(profilePayload),
         });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          console.warn('[Reportly] Backend profile creation notice:', errData);
+        }
       } catch (profileErr) {
-        console.warn('[Reportly] Backend profile setup skipped:', profileErr);
+        console.warn('[Reportly] Backend profile setup notice:', profileErr);
       }
 
       navigate('/dashboard', { replace: true });

@@ -37,6 +37,7 @@ import uuid
 from classifier import classify_status, normalize_unit, STATUS_WITHIN_RANGE, STATUS_LOW, STATUS_HIGH, STATUS_NEEDS_VERIFICATION, STATUS_UNKNOWN
 from patterns import analyze_patterns_safely
 from ocr_extractor import parse_ocr_blocks, CBC_DEFINITIONS
+from chat_assistant import process_chat_query
 from datetime import datetime, timezone
 from firebase_config import (
     db, is_firebase_available,
@@ -208,56 +209,91 @@ async def health_check():
 # ---------------------------------------------------------------------------
 
 class CreateProfileRequest(BaseModel):
-    displayName: str
+    displayName: Optional[str] = None
     phoneNumber: Optional[str] = None
     gender: Optional[str] = None
     age: Optional[Union[int, str]] = None
 
 
 @app.post("/api/users/profile")
-async def create_user_profile(
+async def create_user_profile_endpoint(
     body: CreateProfileRequest,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """
     Creates or updates the Firestore profile for the authenticated user.
-    uid and email come from the verified Firebase token — not the request body.
+    uid and email come from the verified Firebase token — never the request body.
     """
     uid = current_user["uid"]
     email = current_user.get("email", "")
-    display_name = body.displayName.strip()
+    display_name = body.displayName.strip() if body.displayName is not None else None
 
-    if not display_name:
+    if body.displayName is not None and not display_name:
         raise HTTPException(status_code=400, detail="displayName cannot be empty.")
+
+    clean_phone = None
+    if body.phoneNumber is not None:
+        raw_phone = body.phoneNumber.strip()
+        if raw_phone:
+            clean_digits = re.sub(r"\D", "", raw_phone)
+            if len(clean_digits) != 10:
+                raise HTTPException(status_code=400, detail="Mobile number must be a valid 10-digit number.")
+            clean_phone = clean_digits
+        else:
+            clean_phone = ""
+
+    normalized_age = None
+    if body.age is not None:
+        str_age = str(body.age).strip()
+        if str_age:
+            try:
+                num_age = int(str_age)
+                if num_age < 1 or num_age > 120:
+                    raise HTTPException(status_code=400, detail="Age must be between 1 and 120.")
+                normalized_age = num_age
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Age must be a valid number.")
+        else:
+            normalized_age = None
 
     ok = create_or_update_user_profile(
         uid=uid,
         email=email,
         display_name=display_name,
-        phone_number=body.phoneNumber or "",
-        gender=body.gender or "",
-        age=body.age,
+        phone_number=clean_phone,
+        gender=body.gender.strip() if body.gender is not None else None,
+        age=normalized_age,
     )
     if not ok:
         raise HTTPException(status_code=503, detail="Profile service temporarily unavailable.")
 
-    return get_user_profile(uid) or {
-        "success": True,
+    profile = get_user_profile(uid)
+    return profile or {
         "uid": uid,
-        "displayName": display_name,
-        "phoneNumber": body.phoneNumber,
-        "gender": body.gender,
-        "age": body.age,
+        "email": email,
+        "displayName": display_name or (email.split("@")[0] if email else "User"),
+        "phoneNumber": clean_phone or "",
+        "gender": body.gender or "Male",
+        "age": normalized_age,
     }
 
 
 @app.put("/api/users/profile")
-async def update_user_profile(
+async def update_user_profile_put(
     body: CreateProfileRequest,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Updates profile attributes (name, phone, gender, age) for authenticated user."""
-    return await create_user_profile(body, current_user)
+    return await create_user_profile_endpoint(body, current_user)
+
+
+@app.patch("/api/users/profile")
+async def update_user_profile_patch(
+    body: CreateProfileRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Partially updates profile attributes for authenticated user."""
+    return await create_user_profile_endpoint(body, current_user)
 
 
 @app.get("/api/users/profile")
@@ -270,10 +306,12 @@ async def get_profile(current_user: Dict[str, Any] = Depends(get_current_user)):
     if profile:
         return profile
 
-    # Profile doesn't exist yet — auto-create from token claims
+    # Profile doesn't exist yet — auto-create from token claims without blanking attributes
     email = current_user.get("email", "")
-    name = current_user.get("name") or email.split("@")[0] or "User"
-    create_or_update_user_profile(uid=uid, email=email, display_name=name)
+    name = current_user.get("name") or (email.split("@")[0] if email else "User")
+    ok = create_or_update_user_profile(uid=uid, email=email, display_name=name)
+    if not ok:
+        raise HTTPException(status_code=503, detail="Profile service temporarily unavailable.")
     return get_user_profile(uid) or {"uid": uid, "email": email, "displayName": name}
 
 
@@ -592,160 +630,23 @@ class AskRequest(BaseModel):
     context: Optional[Dict[str, Any]] = None
 
 
-# Diagnostic & prescriptive intent triggers
-DIAGNOSTIC_TRIGGERS = [
-    "diagnos", "do i have", "am i suffering", "have i got", "is this cancer",
-    "leukemia", "tumor", "cure me", "what disease", "which disease",
-    "prescribe", "what medicine", "what drug", "can i take", "am i sick",
-    "how to treat", "treatment for", "dosage", "tablet", "antibiotic",
-    "pill", "medication", "remedy",
-    "kya mujhe", "bimaari", "bimari", "rog", "kya ye cancer", "dawa", "dawai", "ilaj", "ilaaj", "konsi bimari",
-    "क्या मुझे", "बीमारी", "रोग", "कैंसर", "दवा", "दवाई", "इलाज", "एंटीबायोटिक", "गोली", "उपचार", "लक्षण क्या बताते हैं"
-]
-
-# Red-flag emergency symptoms
-EMERGENCY_TRIGGERS = [
-    "chest pain", "difficulty breathing", "shortness of breath", "fainted",
-    "passing out", "unconscious", "coughing blood", "vomiting blood",
-    "heavy bleeding", "severe abdominal pain", "stroke", "paralysis", "heart attack",
-    "chhati me dard", "chhati mein dard", "seene me dard", "seene mein dard",
-    "saans lene me takleef", "saans phool", "behosh", "khoon ki ulti",
-    "सीने में दर्द", "छाती में दर्द", "सांस लेने में तकलीफ", "सांस फूलना", "बेहोश", "खून की उल्टी", "खून बहना"
-]
-
-
 @app.post("/api/ask")
 async def ask_guardrail(
     request: AskRequest,
     x_gemini_api_key: Optional[str] = Header(None),
 ):
-    q_lower = request.question.lower().strip()
-    is_hindi = request.language == "hi"
-
-    # 1. EMERGENCY SYMPTOM CHECK
-    is_emergency = any(trig in q_lower for trig in EMERGENCY_TRIGGERS)
-    if is_emergency:
-        if is_hindi:
-            return {
-                "refusal": True,
-                "is_emergency": True,
-                "guardrail_triggered": "आपातकालीन चिकित्सा सुरक्षा चेतावनी (Emergency Care Protocol)",
-                "reason": "संभावित रूप से गंभीर आपातकालीन लक्षण पाए गए।",
-                "message": "⚠️ ध्यान दें: आपने जिन लक्षणों (जैसे सीने में दर्द, सांस लेने में अत्यधिक कठिनाई या गंभीर रक्तस्राव) का उल्लेख किया है, वे संभावित रूप से आपातकालीन स्थिति का संकेत हो सकते हैं। कृपया किसी भी मोबाइल ऐप पर निर्भर रहने के बजाय तुरंत आपातकालीन चिकित्सा सेवा (112) या नजदीकी अस्पताल के आपातकालीन विभाग (ER) से संपर्क करें।",
-                "suggested_questions": [
-                    "नजदीकी आपातकालीन अस्पताल कहाँ है?",
-                    "आपातकालीन चिकित्सक को वर्तमान में लिए जा रहे सभी लक्षण बताएं।"
-                ]
-            }
-        else:
-            return {
-                "refusal": True,
-                "is_emergency": True,
-                "guardrail_triggered": "Emergency Clinical Warning Guardrail",
-                "reason": "Potential life-threatening symptoms detected.",
-                "message": "⚠️ CRITICAL SAFETY NOTICE: The symptoms you described (such as chest pain, severe shortness of breath, heavy bleeding, or loss of consciousness) may require urgent medical intervention. Please do NOT rely on an educational application. Contact emergency services (911 / 112) or proceed to the nearest emergency room immediately.",
-                "suggested_questions": [
-                    "What is the nearest urgent care or emergency facility?",
-                    "Alert attending staff to all acute symptoms and medications immediately."
-                ]
-            }
-
-    # 2. DIAGNOSTIC OR TREATMENT REFUSAL CHECK
-    is_diagnostic_attempt = any(trigger in q_lower for trigger in DIAGNOSTIC_TRIGGERS)
-
-    if is_diagnostic_attempt:
-        if is_hindi:
-            return {
-                "refusal": True,
-                "is_emergency": False,
-                "guardrail_triggered": "निदान एवं उपचार अस्वीकरण गार्डरेल (Diagnostic Refusal Guardrail)",
-                "reason": "रिपोर्टली (Reportly) रोग का निदान करने या दवा परामर्श देने के लिए पूरी तरह से प्रतिबंधित है।",
-                "message": "मैं किसी बीमारी का निदान (Diagnosis) नहीं कर सकता और न ही कोई दवा लिख सकता हूँ। लैब रिपोर्ट केवल व्यक्तिगत बायोमार्कर दर्शाती हैं। किसी भी बीमारी का सही निदान डॉक्टर द्वारा शारीरिक परीक्षण, रोगी के लक्षणों और चिकित्सीय इतिहास के आधार पर ही संभव है।",
-                "suggested_questions": [
-                    "डॉक्टर साहब, मेरे इन असामान्य टेस्ट परिणामों के पीछे क्या संभावित कारण हो सकते हैं?",
-                    "क्या मुझे किसी अन्य विशिष्ट जांच (जैसे आयरन प्रोफाइल या अल्ट्रासाउंड) की आवश्यकता है?",
-                    "मेरी वर्तमान जीवनशैली या आहार में क्या सुधार मदद कर सकता है?"
-                ]
-            }
-        else:
-            return {
-                "refusal": True,
-                "is_emergency": False,
-                "guardrail_triggered": "Diagnostic & Treatment Refusal Guardrail",
-                "reason": "Reportly is strictly an educational tool and strictly refuses diagnostic or prescriptive inquiries.",
-                "message": "I cannot diagnose illnesses, confirm specific diseases, or recommend medications. Complete Blood Count reports measure cell counts, but accurate medical diagnosis requires an evaluation of your physical symptoms, medical history, and clinical exam by a licensed physician.",
-                "suggested_questions": [
-                    "What potential clinical factors could explain these specific numbers?",
-                    "Do my physical symptoms align with any of these out-of-range parameters?",
-                    "Would any follow-up tests (such as a repeat blood count in a few weeks) be appropriate?"
-                ]
-            }
-
-    # 3. GROUNDED EDUCATIONAL QUESTION ANSWERING
+    """
+    Intelligent chatbot & clinical knowledge engine endpoint for Complete Blood Count inquiries.
+    Enforces non-diagnostic safety guardrails, emergency symptom triage,
+    multimodal Gemini AI generation, and extensive deterministic clinical knowledge fallback.
+    """
     active_key = x_gemini_api_key or DEFAULT_API_KEY
-    if active_key and request.context:
-        try:
-            genai.configure(api_key=active_key)
-            model = genai.GenerativeModel("gemini-flash-latest")
-
-            context_summary = []
-            for p in request.context.get("parameters", [])[:10]:
-                context_summary.append(f"{p.get('name')}: {p.get('value')} {p.get('unit')} (Range: {p.get('range')}, Status: {p.get('status')})")
-            ctx_str = "\n".join(context_summary)
-
-            prompt = f"""
-You are Reportly, an educational laboratory report explanation assistant.
-CRITICAL MEDICAL SAFETY RULES:
-1. NEVER diagnose a disease, condition, or illness.
-2. NEVER prescribe medications, drugs, herbs, or dosages.
-3. NEVER tell the user they definitely have or do not have a condition.
-4. Ground your response ONLY in what standard Complete Blood Count parameters measure.
-5. If the user asks in Hindi, answer in clear Hindi. If in English, answer in English.
-6. Keep the response concise (2-3 paragraphs max), educational, and reassuring. Always emphasize discussing with a doctor.
-
-REPORT PARAMETERS:
-{ctx_str}
-
-USER QUESTION:
-{request.question}
-"""
-            llm_response = model.generate_content(prompt)
-            return {
-                "refusal": False,
-                "is_emergency": False,
-                "guardrail_triggered": None,
-                "message": llm_response.text.strip(),
-                "suggested_questions": [
-                    "Could temporary lifestyle or hydration factors influence this parameter?",
-                    "What timeframe would you advise for a follow-up blood count?"
-                ]
-            }
-        except Exception as e:
-            print(f"Gemini LLM ask error: {e}. Falling back to safe deterministic response.")
-
-    # 4. DETERMINISTIC SAFE FALLBACK RESPONSE
-    if is_hindi:
-        return {
-            "refusal": False,
-            "is_emergency": False,
-            "guardrail_triggered": None,
-            "message": "यह प्रश्न स्वास्थ्य समझ के लिए उपयोगी है। आपकी सीबीसी रिपोर्ट में मापे गए पैरामीटर शरीर में लाल रक्त कोशिकाओं (ऑक्सीजन वितरण), श्वेत रक्त कोशिकाओं (रोग प्रतिरोध) और प्लेटलेट्स (रक्त का थक्का जमना) की वर्तमान स्थिति दर्शाते हैं। यदि कोई संख्या सामान्य सीमा से बाहर है, तो यह केवल एक संकेत है जिसे अपने चिकित्सक के साथ चर्चा करके समझना चाहिए।",
-            "suggested_questions": [
-                "क्या इस टेस्ट के नतीजे किसी अस्थायी कारण (जैसे निर्जलीकरण या हालिया संक्रमण) से प्रभावित हो सकते हैं?",
-                "अगली बार यह टेस्ट मुझे कब दोहराना चाहिए?"
-            ]
-        }
-    else:
-        return {
-            "refusal": False,
-            "is_emergency": False,
-            "guardrail_triggered": None,
-            "message": "This is a great clarifying question. Complete Blood Count (CBC) parameters provide a high-level view of your red blood cells (oxygen delivery), white blood cells (immune defense), and platelets (clotting). When a marker sits outside the lab's reference range, physicians evaluate it in the context of your overall physical health, symptoms, and medical history.",
-            "suggested_questions": [
-                "Could temporary lifestyle or hydration factors have influenced this marker?",
-                "What timeline do you recommend for repeating this lab test to monitor trends?"
-            ]
-        }
+    return process_chat_query(
+        question=request.question,
+        language=request.language or "en",
+        context=request.context,
+        api_key=active_key,
+    )
 
 
 if __name__ == "__main__":

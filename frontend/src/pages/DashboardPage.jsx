@@ -12,6 +12,7 @@ import LandingDashboard from '../components/LandingDashboard';
 import ResultsDashboard from '../components/ResultsDashboard';
 import ProfileModal from '../components/ProfileModal';
 import ReportHistoryPanel from '../components/ReportHistoryPanel';
+import AskReportlyGuardrail from '../components/AskReportlyGuardrail';
 import {
   saveReportToFirestore,
   getUserReportsFromFirestore,
@@ -22,6 +23,13 @@ import {
   ChevronRight,
   History,
   AlertTriangle,
+  User,
+  Phone,
+  Calendar,
+  Edit3,
+  MessageSquare,
+  X,
+  Sparkles,
 } from 'lucide-react';
 
 const DashboardPage = () => {
@@ -31,6 +39,7 @@ const DashboardPage = () => {
   const [results, setResults] = useState(null);
   const [language, setLanguage] = useState('en');
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   const [reports, setReports] = useState([]);
   const [reportsLoading, setReportsLoading] = useState(false);
@@ -223,6 +232,29 @@ const DashboardPage = () => {
                     ? `You have ${reports.length} saved CBC report${reports.length > 1 ? 's' : ''} in your history. Review past results or upload a new panel below.`
                     : 'Upload your latest CBC blood test to extract parameters, identify multi-marker patterns, and prepare discussion questions for your doctor.'}
                 </p>
+
+                {/* Patient Demographics Bar */}
+                <div className="flex flex-wrap items-center gap-2 mt-4 text-xs">
+                  <div className="flex items-center gap-1.5 bg-emerald-950/70 border border-emerald-500/20 px-3 py-1 rounded-full text-emerald-100">
+                    <User className="w-3.5 h-3.5 text-emerald-300" />
+                    <span>Gender: <strong>{userProfile?.gender || 'Not set'}</strong></span>
+                  </div>
+                  <div className="flex items-center gap-1.5 bg-emerald-950/70 border border-emerald-500/20 px-3 py-1 rounded-full text-emerald-100">
+                    <Calendar className="w-3.5 h-3.5 text-emerald-300" />
+                    <span>Age: <strong>{userProfile?.age ? `${userProfile.age} yrs` : 'Not set'}</strong></span>
+                  </div>
+                  <div className="flex items-center gap-1.5 bg-emerald-950/70 border border-emerald-500/20 px-3 py-1 rounded-full text-emerald-100">
+                    <Phone className="w-3.5 h-3.5 text-emerald-300" />
+                    <span>Mobile: <strong>{userProfile?.phoneNumber ? `+91 ${userProfile.phoneNumber}` : 'Not set'}</strong></span>
+                  </div>
+                  <button
+                    onClick={() => setIsProfileOpen(true)}
+                    className="flex items-center gap-1 text-xs text-emerald-200 hover:text-white font-semibold underline underline-offset-2 ml-1 cursor-pointer transition-colors"
+                  >
+                    <Edit3 className="w-3 h-3" />
+                    Edit Details
+                  </button>
+                </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-3">
@@ -321,6 +353,47 @@ const DashboardPage = () => {
         isOpen={isProfileOpen}
         onClose={() => setIsProfileOpen(false)}
       />
+
+      {/* Floating Chat Assistant Launcher */}
+      <div className="fixed bottom-6 right-6 z-40">
+        <button
+          onClick={() => setIsChatOpen((v) => !v)}
+          className="flex items-center gap-2.5 px-4 py-3 rounded-full bg-emerald-800 hover:bg-emerald-900 text-white font-bold text-sm shadow-xl hover:shadow-2xl transition-all cursor-pointer border border-emerald-700/80 active:scale-95 group"
+          aria-label="Open Ask Reportly AI Assistant"
+        >
+          <div className="relative">
+            <MessageSquare className="w-5 h-5 text-emerald-200 group-hover:scale-110 transition-transform" />
+            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full border-2 border-emerald-900 animate-pulse" />
+          </div>
+          <span className="hidden sm:inline">
+            {language === 'hi' ? 'चैटबॉट से पूछें' : 'Ask Reportly'}
+          </span>
+        </button>
+      </div>
+
+      {/* Floating Chat Assistant Drawer / Modal */}
+      {isChatOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-xs flex items-end sm:items-center justify-end sm:justify-end p-2 sm:p-6"
+          onClick={() => setIsChatOpen(false)}
+        >
+          <div
+            className="bg-white rounded-3xl shadow-2xl border border-emerald-100 w-full sm:max-w-2xl max-h-[90vh] overflow-y-auto animate-in fade-in slide-in-from-bottom-6 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="relative p-2 sm:p-3">
+              <button
+                onClick={() => setIsChatOpen(false)}
+                className="absolute top-4 right-4 z-10 text-slate-400 hover:text-slate-700 bg-white/90 p-2 rounded-full shadow-xs cursor-pointer border border-slate-100"
+                aria-label="Close Chat"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <AskReportlyGuardrail language={language} reportContext={results} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

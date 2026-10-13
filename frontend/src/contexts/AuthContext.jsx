@@ -44,65 +44,81 @@ export const AuthProvider = ({ children }) => {
     }
   }, [currentUser]);
 
-  /** Fetches the user's Firestore profile via the backend, with direct Firestore fallback. */
+  /** Fetches the user's Firestore profile (checks authenticated backend, with Firestore client fallback). */
   const fetchProfile = useCallback(async (user) => {
     if (!user) {
       setUserProfile(null);
       return;
     }
 
-    let profile = null;
+    let backendProfile = null;
+    let firestoreProfile = null;
 
-    // Primary: try backend
+    // 1. Primary: Fetch from authenticated backend endpoint (uses Admin SDK)
     try {
       const token = await user.getIdToken(false);
       const res = await fetch(`${API_BASE_URL}/api/users/profile`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
-        profile = await res.json();
+        backendProfile = await res.json();
       }
     } catch (err) {
-      // Backend offline or unreachable
+      console.warn('[Reportly] Backend profile fetch notice:', err);
     }
 
-    // Secondary / Fallback: read directly from Firestore client
-    if (!profile) {
+    // 2. Fallback: Direct Firestore read (permitted by security rules)
+    if (!backendProfile) {
       try {
-        profile = await getUserProfileFromFirestore(user.uid);
+        firestoreProfile = await getUserProfileFromFirestore(user.uid);
       } catch (err) {
-        console.warn('[Reportly] Direct Firestore profile read failed:', err);
+        console.warn('[Reportly] Direct Firestore profile read notice:', err);
       }
     }
 
-    // Default fallback from user auth object
-    if (!profile) {
-      profile = {
-        uid: user.uid,
-        email: user.email,
-        displayName: user.displayName || user.email?.split('@')[0] || 'User',
-      };
-    }
+    const merged = {
+      uid: user.uid,
+      email: user.email,
+      displayName:
+        backendProfile?.displayName ||
+        firestoreProfile?.displayName ||
+        user.displayName ||
+        user.email?.split('@')[0] ||
+        'User',
+      phoneNumber:
+        backendProfile?.phoneNumber ||
+        firestoreProfile?.phoneNumber ||
+        '',
+      gender:
+        backendProfile?.gender ||
+        firestoreProfile?.gender ||
+        'Male',
+      age:
+        backendProfile?.age !== undefined && backendProfile?.age !== null
+          ? backendProfile.age
+          : (firestoreProfile?.age !== undefined && firestoreProfile?.age !== null ? firestoreProfile.age : null),
+      createdAt: backendProfile?.createdAt || firestoreProfile?.createdAt,
+      updatedAt: backendProfile?.updatedAt || firestoreProfile?.updatedAt,
+    };
 
-    setUserProfile(profile);
+    setUserProfile(merged);
   }, []);
 
-  /** Updates user profile attributes (displayName, phoneNumber, gender, age) */
+  /** Updates user profile attributes (displayName, phoneNumber, gender, age) via authenticated backend */
   const updateProfile = useCallback(
     async (newData) => {
       if (!currentUser) return false;
 
-      // 1. Direct write to Firestore
-      try {
-        await saveUserProfileToFirestore(currentUser.uid, newData);
-      } catch (err) {
-        console.warn('[Reportly] Firestore profile update warning:', err);
-      }
+      // 1. Optimistically update local state
+      setUserProfile((prev) => ({
+        ...(prev || {}),
+        ...newData,
+      }));
 
-      // 2. Sync to backend if accessible
+      // 2. Write through trusted authenticated FastAPI backend
       try {
         const token = await currentUser.getIdToken(false);
-        await fetch(`${API_BASE_URL}/api/users/profile`, {
+        const res = await fetch(`${API_BASE_URL}/api/users/profile`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -110,17 +126,22 @@ export const AuthProvider = ({ children }) => {
           },
           body: JSON.stringify(newData),
         });
+
+        if (res.ok) {
+          const savedData = await res.json();
+          setUserProfile((prev) => ({
+            ...(prev || {}),
+            ...savedData,
+          }));
+          return true;
+        } else {
+          const errJson = await res.json().catch(() => ({}));
+          throw new Error(errJson.detail || 'Failed to update profile on backend.');
+        }
       } catch (err) {
-        // Backend sync optional
+        console.error('[Reportly] Profile update error:', err);
+        throw err;
       }
-
-      // 3. Immediately update in local state
-      setUserProfile((prev) => ({
-        ...(prev || {}),
-        ...newData,
-      }));
-
-      return true;
     },
     [currentUser]
   );

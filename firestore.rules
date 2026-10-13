@@ -1,51 +1,42 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // =========================================================================
-    // DENY-BY-DEFAULT
-    // All requests are denied unless explicitly permitted below.
-    // =========================================================================
+    function signedIn() {
+      return request.auth != null;
+    }
 
-    // =========================================================================
-    // users/{uid} — User profiles and user's private reports
-    // =========================================================================
+    function ownsUser(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // A user can read only their own profile.
+    // Profile writes are performed by the trusted backend.
     match /users/{uid} {
-      // A signed-in user may read and update only their own profile document.
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read: if ownsUser(uid);
+      allow write: if false;
 
-      // Subcollection: users/{uid}/reports/{reportId}
-      // Strictly private: only this user can read, create, update, or delete their own reports.
+      // A user can read only their own saved reports.
+      // The backend handles all report creation, updates and deletion.
       match /reports/{reportId} {
-        allow read, write: if request.auth != null && request.auth.uid == uid;
+        allow read: if ownsUser(uid);
+        allow write: if false;
       }
     }
 
-    // =========================================================================
-    // reports/{reportId} — Lab reports
-    // =========================================================================
+    // The backend uses Firebase Admin SDK, which bypasses these rules.
+    // Browser clients cannot access the root-level report mirror.
     match /reports/{reportId} {
-      // A signed-in user may read, update, or delete a report ONLY if they own it.
-      allow read, update, delete: if request.auth != null
-                  && resource.data.ownerUid == request.auth.uid;
-
-      // A signed-in user may create a report if ownerUid matches their authenticated UID.
-      allow create: if request.auth != null
-                  && request.resource.data.ownerUid == request.auth.uid;
+      allow read, write: if false;
     }
 
-
-    // =========================================================================
-    // _connection_tests — Internal connectivity test collection (dev only).
-    // Consider removing this in production or restricting to admin.
-    // =========================================================================
+    // Connection-test records are not accessible from browser clients.
     match /_connection_tests/{docId} {
       allow read, write: if false;
     }
 
-    // =========================================================================
-    // Everything else — deny all
-    // =========================================================================
+    // Everything else is denied.
     match /{document=**} {
       allow read, write: if false;
     }

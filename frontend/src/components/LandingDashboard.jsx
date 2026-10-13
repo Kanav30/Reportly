@@ -7,8 +7,11 @@ import {
   ArrowRight,
   Activity,
   X,
-  FileCheck2
+  FileCheck2,
+  Sparkles,
+  MessageSquare
 } from 'lucide-react';
+import AskReportlyGuardrail from './AskReportlyGuardrail';
 
 const MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024; // 15 MB
 const SUPPORTED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
@@ -323,6 +326,27 @@ const LandingDashboard = ({ onUpload, language = 'en' }) => {
               </p>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Interactive CBC Chatbot & Clinical Guardrail Section */}
+      <section className="py-14 bg-[#fafaf9] border-b border-emerald-100">
+        <div className="max-w-6xl mx-auto px-4">
+          <div className="text-center mb-6">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-100 text-emerald-900 text-xs font-bold mb-3 border border-emerald-200">
+              <Sparkles className="w-3.5 h-3.5 text-emerald-700" />
+              <span>{isHindi ? 'इंटेलिजेंट सीबीसी चैटबॉट' : 'Interactive CBC Knowledge Assistant'}</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-emerald-950">
+              {isHindi ? 'सीबीसी रिपोर्ट या रक्त घटकों के बारे में कुछ भी पूछें' : 'Ask Anything About Complete Blood Count'}
+            </h2>
+            <p className="text-xs sm:text-sm text-emerald-800/80 mt-1 max-w-xl mx-auto">
+              {isHindi
+                ? 'MCV, प्लेटलेट्स, हीमोग्लोबिन, खानपान या हाइड्रेशन के बारे में तुरंत विश्वसनीय जानकारी प्राप्त करें।'
+                : 'Instant parameter explanations (MCV, Platelets, RBC), dietary guidance, and doctor discussion formulation.'}
+            </p>
+          </div>
+          <AskReportlyGuardrail language={language} reportContext={null} />
         </div>
       </section>
 

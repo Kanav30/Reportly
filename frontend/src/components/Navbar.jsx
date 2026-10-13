@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Activity, ShieldCheck, Key, History, LogOut, User, ChevronDown } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { useState, useRef, useEffect } from 'react';
 
 const UserMenu = ({ userProfile, currentUser, onLogout, onOpenProfile }) => {
   const [open, setOpen] = useState(false);
@@ -35,20 +35,34 @@ const UserMenu = ({ userProfile, currentUser, onLogout, onOpenProfile }) => {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-100 py-1.5 z-50">
-          <div className="px-4 py-2.5 border-b border-slate-100">
+        <div className="absolute right-0 mt-2 w-60 bg-white rounded-2xl shadow-xl border border-slate-100 py-1.5 z-50">
+          <div className="px-4 py-3 border-b border-slate-100">
             <p className="text-xs font-bold text-slate-800 truncate">{displayName}</p>
             <p className="text-[11px] text-slate-500 truncate mt-0.5">{currentUser?.email}</p>
-            {userProfile?.phoneNumber && (
-              <p className="text-[10px] text-emerald-700 font-mono mt-0.5">+91 {userProfile.phoneNumber}</p>
-            )}
+            <div className="flex flex-wrap items-center gap-1.5 mt-2 text-[10px] text-emerald-800 font-medium">
+              {userProfile?.age && (
+                <span className="bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                  {userProfile.age} yrs
+                </span>
+              )}
+              {userProfile?.gender && (
+                <span className="bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                  {userProfile.gender}
+                </span>
+              )}
+              {userProfile?.phoneNumber && (
+                <span className="bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded font-mono">
+                  +91 {userProfile.phoneNumber}
+                </span>
+              )}
+            </div>
           </div>
           <button
             onClick={() => { setOpen(false); if (onOpenProfile) onOpenProfile(); }}
             className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-900 transition-colors cursor-pointer"
           >
             <User className="w-3.5 h-3.5 text-emerald-700" />
-            My Profile
+            My Profile / Demographics
           </button>
           <button
             onClick={() => { setOpen(false); onLogout(); }}
@@ -72,7 +86,13 @@ const Navbar = ({
   onOpenProfile,
 }) => {
   const isHindi = language === 'hi';
+  const navigate = useNavigate();
   const { currentUser, userProfile, logout } = useAuth();
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
 
   return (
     <nav className="bg-white/95 backdrop-blur-md border-b border-emerald-100 sticky top-0 z-50">
@@ -147,7 +167,7 @@ const Navbar = ({
               <UserMenu
                 userProfile={userProfile}
                 currentUser={currentUser}
-                onLogout={logout}
+                onLogout={handleLogout}
                 onOpenProfile={onOpenProfile}
               />
             ) : (

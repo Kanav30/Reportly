@@ -102,12 +102,15 @@ def verify_firebase_token(id_token: str) -> Optional[Dict[str, Any]]:
 # User profile helpers (Admin SDK — bypasses Firestore rules)
 # ---------------------------------------------------------------------------
 
+_local_profiles: Dict[str, Dict[str, Any]] = {}
+
+
 def create_or_update_user_profile(
     uid: str,
     email: str,
-    display_name: str,
-    phone_number: str = "",
-    gender: str = "",
+    display_name: Optional[str] = None,
+    phone_number: Optional[str] = None,
+    gender: Optional[str] = None,
     age: Optional[Any] = None,
 ) -> bool:
     """
@@ -115,46 +118,100 @@ def create_or_update_user_profile(
     - uid and email always come from the verified Firebase token.
     - display_name, phone_number, gender, age are user patient attributes.
     """
-    if not db:
-        return False
-    try:
-        ref = db.collection("users").document(uid)
-        now = datetime.now(timezone.utc).isoformat()
-        doc = ref.get()
-        payload = {
-            "displayName": display_name,
-            "phoneNumber": phone_number,
-            "gender": gender,
-            "age": age,
-            "updatedAt": now,
-        }
-        if doc.exists:
-            ref.update(payload)
+    now = datetime.now(timezone.utc).isoformat()
+    # Normalize age if provided
+    normalized_age = None
+    if age is not None:
+        if str(age).strip() == "":
+            normalized_age = None
         else:
-            ref.set({
+            try:
+                normalized_age = int(age)
+            except (ValueError, TypeError):
+                normalized_age = age
+
+    if not db:
+        existing = _local_profiles.get(uid, {})
+        update_data: Dict[str, Any] = {"updatedAt": now}
+        if email:
+            update_data["email"] = email
+        if display_name is not None and display_name.strip():
+            update_data["displayName"] = display_name.strip()
+        if phone_number is not None:
+            update_data["phoneNumber"] = phone_number.strip()
+        if gender is not None:
+            update_data["gender"] = gender.strip()
+        if age is not None:
+            update_data["age"] = normalized_age
+
+        if existing:
+            _local_profiles[uid] = {**existing, **update_data}
+        else:
+            _local_profiles[uid] = {
                 "uid": uid,
                 "email": email,
-                **payload,
+                "displayName": (display_name or "").strip() or (email.split("@")[0] if email else "User"),
+                "phoneNumber": (phone_number or "").strip() if phone_number is not None else "",
+                "gender": (gender or "Male").strip() if gender is not None else "Male",
+                "age": normalized_age,
                 "createdAt": now,
-            })
+                "updatedAt": now,
+            }
+        return True
+
+    try:
+        ref = db.collection("users").document(uid)
+        doc = ref.get()
+        if doc.exists:
+            existing = doc.to_dict() or {}
+            update_data = {"updatedAt": now}
+
+            if email:
+                update_data["email"] = email
+            if display_name is not None and display_name.strip():
+                update_data["displayName"] = display_name.strip()
+            if phone_number is not None:
+                update_data["phoneNumber"] = phone_number.strip()
+            if gender is not None:
+                update_data["gender"] = gender.strip()
+            if age is not None:
+                update_data["age"] = normalized_age
+
+            ref.update(update_data)
+            _local_profiles[uid] = {**existing, **update_data}
+        else:
+            new_payload = {
+                "uid": uid,
+                "email": email,
+                "displayName": (display_name or "").strip() or (email.split("@")[0] if email else "User"),
+                "phoneNumber": (phone_number or "").strip() if phone_number is not None else "",
+                "gender": (gender or "Male").strip() if gender is not None else "Male",
+                "age": normalized_age,
+                "createdAt": now,
+                "updatedAt": now,
+            }
+            ref.set(new_payload)
+            _local_profiles[uid] = new_payload
         return True
     except Exception as e:
-        print(f"[Reportly] Error creating/updating user profile for {uid}: {e}")
+        print(f"[Reportly] Error creating/updating user profile for {uid} in Firestore: {e}")
         return False
 
 
 
 def get_user_profile(uid: str) -> Optional[Dict[str, Any]]:
-    """Retrieves the Firestore profile for a given UID."""
-    if not db:
-        return None
-    try:
-        doc = db.collection("users").document(uid).get()
-        if doc.exists:
-            return doc.to_dict()
-    except Exception as e:
-        print(f"[Reportly] Error fetching user profile for {uid}: {e}")
-    return None
+    """Retrieves the Firestore profile for a given UID, with local fallback."""
+    if db and uid:
+        try:
+            doc = db.collection("users").document(uid).get()
+            if doc.exists:
+                data = doc.to_dict()
+                if data:
+                    _local_profiles[uid] = data
+                    return data
+        except Exception as e:
+            print(f"[Reportly] Error fetching user profile for {uid}: {e}")
+    return _local_profiles.get(uid)
 
 
 # ---------------------------------------------------------------------------

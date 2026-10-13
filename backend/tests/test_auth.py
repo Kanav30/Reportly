@@ -321,3 +321,116 @@ async def test_ask_guardrail_emergency_still_works():
         data = response.json()
         assert data["refusal"] is True
         assert data["is_emergency"] is True
+
+
+# ---------------------------------------------------------------------------
+# 10. Profile Save, Update, and Demographic Preservation Tests
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_profile_create_and_update_preserves_demographics():
+    """Verifies that profile saving persists age, phone, gender, and updating preserves fields."""
+    with patch("main.verify_firebase_token") as mock_verify:
+        mock_verify.return_value = make_decoded_token(MOCK_UID_A, email="patient.a@reportly.test")
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            headers = {"Authorization": "Bearer valid-token-user-a"}
+
+            # 1. Initial Profile Creation
+            res = await client.post(
+                "/api/users/profile",
+                headers=headers,
+                json={
+                    "displayName": "Patient Alpha",
+                    "phoneNumber": "9876543210",
+                    "gender": "Female",
+                    "age": 34,
+                },
+            )
+            assert res.status_code == 200
+            data = res.json()
+            assert data["displayName"] == "Patient Alpha"
+            assert data["phoneNumber"] == "9876543210"
+            assert data["gender"] == "Female"
+            assert data["age"] == 34
+            assert data["email"] == "patient.a@reportly.test"
+
+            # 2. Get Profile
+            res_get = await client.get("/api/users/profile", headers=headers)
+            assert res_get.status_code == 200
+            get_data = res_get.json()
+            assert get_data["phoneNumber"] == "9876543210"
+            assert get_data["age"] == 34
+
+            # 3. Partial Update via PUT (updating only age, phone number should not be erased)
+            res_put = await client.put(
+                "/api/users/profile",
+                headers=headers,
+                json={"age": 35},
+            )
+            assert res_put.status_code == 200
+            put_data = res_put.json()
+            assert put_data["age"] == 35
+            assert put_data["phoneNumber"] == "9876543210"
+            assert put_data["gender"] == "Female"
+
+
+@pytest.mark.asyncio
+async def test_profile_validation_rejects_invalid_inputs():
+    """Verifies that invalid age or invalid phone number are rejected with 400."""
+    with patch("main.verify_firebase_token") as mock_verify:
+        mock_verify.return_value = make_decoded_token(MOCK_UID_A)
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            headers = {"Authorization": "Bearer valid-token-user-a"}
+
+            # Invalid age (> 120)
+            res_bad_age = await client.post(
+                "/api/users/profile",
+                headers=headers,
+                json={"displayName": "Test", "age": 200},
+            )
+            assert res_bad_age.status_code == 400
+            assert "Age must be between 1 and 120" in res_bad_age.text
+
+            # Invalid phone (< 10 digits)
+            res_bad_phone = await client.post(
+                "/api/users/profile",
+                headers=headers,
+                json={"displayName": "Test", "phoneNumber": "12345"},
+            )
+            assert res_bad_phone.status_code == 400
+            assert "10-digit" in res_bad_phone.text
+
+
+@pytest.mark.asyncio
+async def test_user_a_and_user_b_profiles_are_isolated():
+    """Verifies that User A and User B have separate, isolated profile records."""
+    with patch("main.verify_firebase_token") as mock_verify:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            # User A
+            mock_verify.return_value = make_decoded_token(MOCK_UID_A, email="a@test.com")
+            res_a = await client.post(
+                "/api/users/profile",
+                headers={"Authorization": "Bearer token-a"},
+                json={"displayName": "User A", "phoneNumber": "1111111111", "age": 25},
+            )
+            assert res_a.status_code == 200
+
+            # User B
+            mock_verify.return_value = make_decoded_token(MOCK_UID_B, email="b@test.com")
+            res_b = await client.post(
+                "/api/users/profile",
+                headers={"Authorization": "Bearer token-b"},
+                json={"displayName": "User B", "phoneNumber": "2222222222", "age": 40},
+            )
+            assert res_b.status_code == 200
+
+            # Verify User A's data was not overwritten by User B
+            mock_verify.return_value = make_decoded_token(MOCK_UID_A, email="a@test.com")
+            check_a = await client.get("/api/users/profile", headers={"Authorization": "Bearer token-a"})
+            assert check_a.status_code == 200
+            assert check_a.json()["displayName"] == "User A"
+            assert check_a.json()["phoneNumber"] == "1111111111"
+            assert check_a.json()["age"] == 25
+

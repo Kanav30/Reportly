@@ -7,7 +7,8 @@ import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, isFirebaseConfigured } from '../firebase/firebase';
-import { Activity, Eye, EyeOff, AlertCircle, LogIn, AlertTriangle, ArrowRight } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { Activity, Eye, EyeOff, AlertCircle, LogIn, AlertTriangle, ArrowRight, UserCheck } from 'lucide-react';
 
 const FIREBASE_ERROR_MESSAGES = {
   'auth/invalid-email': 'The email address format is invalid.',
@@ -42,6 +43,7 @@ const LoginPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from?.pathname || '/dashboard';
+  const { currentUser, logout } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -61,6 +63,9 @@ const LoginPage = () => {
 
     setLoading(true);
     try {
+      if (currentUser) {
+        await logout();
+      }
       await signInWithEmailAndPassword(auth, email.trim(), password);
       navigate(from, { replace: true });
     } catch (err) {
@@ -118,6 +123,38 @@ const LoginPage = () => {
                 <span>Continue to Dashboard in Standalone Mode</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </Link>
+            </div>
+          )}
+
+          {/* Active session banner (if user was already logged in) */}
+          {currentUser && (
+            <div className="bg-emerald-50 border border-emerald-200 text-emerald-950 rounded-2xl p-4 mb-5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5 text-xs text-emerald-800 font-semibold mb-0.5">
+                    <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Currently Signed In</span>
+                  </div>
+                  <p className="text-sm font-bold text-emerald-950 truncate">{currentUser.email}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await logout();
+                    setEmail('');
+                    setPassword('');
+                  }}
+                  className="px-3 py-1.5 bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs flex-shrink-0"
+                >
+                  Sign Out
+                </button>
+              </div>
+              <div className="mt-2.5 pt-2 border-t border-emerald-200/60 flex items-center justify-between text-xs text-emerald-800">
+                <span>Want to continue as this user?</span>
+                <Link to="/dashboard" className="font-bold text-emerald-900 hover:underline inline-flex items-center gap-1">
+                  Go to Dashboard <ArrowRight className="w-3 h-3" />
+                </Link>
+              </div>
             </div>
           )}
 
