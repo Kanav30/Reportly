@@ -12,10 +12,12 @@
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
     "autoprefixer": "^10.6.1",
+    "firebase": "^13.0.0",
     "lucide-react": "^1.55.0",
     "postcss": "^8.5.29",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "react-router-dom": "^7.18.4",
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {

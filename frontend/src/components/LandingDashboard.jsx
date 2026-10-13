@@ -6,12 +6,9 @@ import {
   AlertTriangle,
   ArrowRight,
   Activity,
-  Sparkles,
-  ChevronRight,
   X,
   FileCheck2
 } from 'lucide-react';
-import { SAMPLE_REPORTS } from '../data/sampleReports';
 
 const MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024; // 15 MB
 const SUPPORTED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
@@ -24,7 +21,7 @@ const PROCESSING_STAGES = [
   { en: "Formulating doctor discussion prompts...", hi: "डॉक्टर चर्चा मार्गदर्शिका तैयार हो रही है..." }
 ];
 
-const LandingDashboard = ({ onUpload, onSelectSample, language = 'en' }) => {
+const LandingDashboard = ({ onUpload, language = 'en' }) => {
   const [dragActive, setDragActive] = useState(false);
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -273,52 +270,6 @@ const LandingDashboard = ({ onUpload, onSelectSample, language = 'en' }) => {
           <div className="flex items-center justify-center gap-2 mt-4 text-xs font-medium text-emerald-800/70">
             <ShieldAlert className="w-3.5 h-3.5 text-emerald-700" />
             <span>{isHindi ? 'सुरक्षित प्रोसेसिंग: अपलोड को कभी भी स्थायी रूप से सार्वजनिक नहीं किया जाता।' : 'Client-first privacy: report files are processed securely in memory without persistent public URLs.'}</span>
-          </div>
-        </div>
-
-        {/* ONE-CLICK SAMPLE REPORTS SECTION */}
-        <div id="sample-reports-section" className="mt-14 max-w-4xl mx-auto">
-          <div className="flex items-center justify-between mb-4 px-2">
-            <div className="flex items-center gap-2 text-left">
-              <Sparkles className="w-4 h-4 text-amber-600" />
-              <h3 className="font-bold text-sm sm:text-base text-emerald-950">
-                {isHindi ? 'त्वरित डेमो: 1-क्लिक सिंथेटिक नमूना रिपोर्ट' : 'Instant Demo: Test with Synthetic Sample Reports'}
-              </h3>
-            </div>
-            <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-              {isHindi ? 'ऑफ़लाइन डेमो तैयार' : 'Offline Ready'}
-            </span>
-          </div>
-
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-left">
-            {SAMPLE_REPORTS.map((sample) => (
-              <div
-                key={sample.id}
-                onClick={() => onSelectSample(sample)}
-                className="bg-white rounded-xl p-4 border border-emerald-100 hover:border-emerald-400 hover:shadow-md cursor-pointer transition-all group flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-center justify-between gap-1 mb-2">
-                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${sample.severity === 'warning' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
-                      }`}>
-                      {sample.tag[language] || sample.tag.en}
-                    </span>
-                    <span className="text-[10px] text-slate-400 font-medium">CBC</span>
-                  </div>
-                  <h4 className="font-bold text-sm text-emerald-950 group-hover:text-emerald-700 transition-colors line-clamp-1">
-                    {sample.title[language] || sample.title.en}
-                  </h4>
-                  <p className="text-xs text-slate-500 mt-1 line-clamp-2">
-                    {sample.summary[language] || sample.summary.en}
-                  </p>
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-emerald-800 group-hover:text-emerald-600">
-                  <span>{isHindi ? 'यह रिपोर्ट देखें' : 'Load report'}</span>
-                  <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-                </div>
-              </div>
-            ))}
           </div>
         </div>
       </section>

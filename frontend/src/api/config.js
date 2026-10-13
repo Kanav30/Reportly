@@ -10,4 +10,6 @@ export const API_ENDPOINTS = {
   HEALTH: `${API_BASE_URL}/api/health`,
   UPLOAD: `${API_BASE_URL}/api/upload`,
   ASK: `${API_BASE_URL}/api/ask`,
+  REPORTS: `${API_BASE_URL}/api/reports`,
+  USER_PROFILE: `${API_BASE_URL}/api/users/profile`,
 };

@@ -1,15 +1,85 @@
 import React from 'react';
-import { Activity, ShieldCheck, Key } from 'lucide-react';
+import { Activity, ShieldCheck, Key, History, LogOut, User, ChevronDown } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { useState, useRef, useEffect } from 'react';
 
-const Navbar = ({ language = 'en', onLanguageChange, onScrollToSamples, onReset, onOpenApiKeyModal, hasApiKey }) => {
+const UserMenu = ({ userProfile, currentUser, onLogout, onOpenProfile }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const displayName = userProfile?.displayName || currentUser?.email?.split('@')[0] || 'Account';
+  const initial = displayName[0]?.toUpperCase() || 'U';
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition-all text-sm font-semibold text-emerald-900 cursor-pointer"
+        aria-haspopup="true"
+        aria-expanded={open}
+      >
+        <div className="w-5 h-5 bg-emerald-700 rounded-full flex items-center justify-center text-[10px] font-bold text-white">
+          {initial}
+        </div>
+        <span className="hidden sm:inline max-w-[120px] truncate">{displayName}</span>
+        <ChevronDown className={`w-3 h-3 text-emerald-700 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-100 py-1.5 z-50">
+          <div className="px-4 py-2.5 border-b border-slate-100">
+            <p className="text-xs font-bold text-slate-800 truncate">{displayName}</p>
+            <p className="text-[11px] text-slate-500 truncate mt-0.5">{currentUser?.email}</p>
+            {userProfile?.phoneNumber && (
+              <p className="text-[10px] text-emerald-700 font-mono mt-0.5">+91 {userProfile.phoneNumber}</p>
+            )}
+          </div>
+          <button
+            onClick={() => { setOpen(false); if (onOpenProfile) onOpenProfile(); }}
+            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-emerald-50 hover:text-emerald-900 transition-colors cursor-pointer"
+          >
+            <User className="w-3.5 h-3.5 text-emerald-700" />
+            My Profile
+          </button>
+          <button
+            onClick={() => { setOpen(false); onLogout(); }}
+            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer border-t border-slate-100"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            Sign out
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const Navbar = ({
+  language = 'en',
+  onLanguageChange,
+  onReset,
+  onToggleHistory,
+  historyCount,
+  onOpenProfile,
+}) => {
   const isHindi = language === 'hi';
+  const { currentUser, userProfile, logout } = useAuth();
 
   return (
     <nav className="bg-white/95 backdrop-blur-md border-b border-emerald-100 sticky top-0 z-50">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
-          <div 
+          <div
             onClick={onReset}
             className="flex-shrink-0 flex items-center gap-2.5 cursor-pointer group"
           >
@@ -24,37 +94,29 @@ const Navbar = ({ language = 'en', onLanguageChange, onScrollToSamples, onReset,
             </div>
           </div>
 
-          {/* Desktop Menu */}
-          <div className="hidden md:flex space-x-6 items-center text-sm">
-            <button 
-              onClick={onScrollToSamples}
-              className="text-emerald-900/80 font-medium hover:text-emerald-700 transition-colors cursor-pointer"
-            >
-              {isHindi ? 'नमूना रिपोर्ट (Samples)' : 'Sample Reports'}
-            </button>
-            <span className="text-emerald-200">•</span>
-            <span className="text-emerald-800/60 font-normal">
-              {isHindi ? 'सीबीसी-फर्स्ट प्रोटोटाइप' : 'CBC-First Prototype'}
-            </span>
+          {/* Desktop Subtitle */}
+          <div className="hidden md:flex items-center text-sm text-emerald-900/70 font-medium">
+            <span>{isHindi ? 'सीबीसी रिपोर्ट विश्लेषण व रोगी अंतर्दृष्टि' : 'CBC Report Decoded • Clinical Clarity'}</span>
           </div>
 
           {/* Right side controls */}
-          <div className="flex items-center gap-2.5">
-            {/* API Key Config Button */}
-            <button
-              onClick={onOpenApiKeyModal}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer ${
-                hasApiKey 
-                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
-                  : 'bg-amber-50 text-amber-900 border-amber-200 hover:bg-amber-100'
-              }`}
-            >
-              <Key className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">
-                {hasApiKey ? 'AI Vision Active' : 'Set Gemini Key'}
-              </span>
-              <span className={`w-2 h-2 rounded-full ${hasApiKey ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
-            </button>
+          <div className="flex items-center gap-2">
+            {/* My Reports button (authenticated only) */}
+            {currentUser && onToggleHistory && (
+              <button
+                onClick={onToggleHistory}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 transition-all cursor-pointer"
+                aria-label="View my reports"
+              >
+                <History className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">My Reports</span>
+                {historyCount > 0 && (
+                  <span className="bg-emerald-700 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                    {historyCount}
+                  </span>
+                )}
+              </button>
+            )}
 
             {/* Language Toggle Pill */}
             <div className="flex items-center bg-emerald-50 p-1 rounded-full border border-emerald-200 shadow-2xs">
@@ -80,11 +142,20 @@ const Navbar = ({ language = 'en', onLanguageChange, onScrollToSamples, onReset,
               </button>
             </div>
 
-            {/* Non-diagnostic badge */}
-            <div className="hidden lg:flex items-center gap-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50/80 px-3 py-1.5 rounded-full border border-emerald-200/80">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
-              <span>{isHindi ? 'निदान नहीं करता' : 'We never diagnose'}</span>
-            </div>
+            {/* User menu (authenticated) or non-diagnostic badge (public) */}
+            {currentUser ? (
+              <UserMenu
+                userProfile={userProfile}
+                currentUser={currentUser}
+                onLogout={logout}
+                onOpenProfile={onOpenProfile}
+              />
+            ) : (
+              <div className="hidden lg:flex items-center gap-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50/80 px-3 py-1.5 rounded-full border border-emerald-200/80">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
+                <span>{isHindi ? 'निदान नहीं करता' : 'We never diagnose'}</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
