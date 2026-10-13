@@ -346,10 +346,15 @@ DIAGNOSTIC_TRIGGERS = [
 
 # Red-flag emergency symptoms
 EMERGENCY_TRIGGERS = [
+    # English terms
     "chest pain", "difficulty breathing", "shortness of breath", "fainted",
     "passing out", "unconscious", "coughing blood", "vomiting blood",
-    "heavy bleeding", "severe abdominal pain", "stroke", "paralysis",
-    "chhati me dard", "saans lene me takleef", "behosh", "khoon ki ulti"
+    "heavy bleeding", "severe abdominal pain", "stroke", "paralysis", "heart attack",
+    # Hinglish terms
+    "chhati me dard", "chhati mein dard", "seene me dard", "seene mein dard", 
+    "saans lene me takleef", "saans phool", "behosh", "khoon ki ulti",
+    # Devanagari terms
+    "सीने में दर्द", "छाती में दर्द", "सांस लेने में तकलीफ", "सांस फूलना", "बेहोश", "खून की उल्टी", "खून बहना"
 ]
 
 
