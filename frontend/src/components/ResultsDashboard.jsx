@@ -306,6 +306,12 @@ const ResultsDashboard = ({ data, onReset, language = 'en', onLanguageChange }) 
               <span className="text-xs text-slate-400 font-medium">
                 {isHindi ? 'सत्यापित नियम इंजन' : 'Deterministic Rules Engine'}
               </span>
+              {data.saved_to_firebase && (
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-300 flex items-center gap-1 shadow-2xs">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>{isHindi ? 'फ़ायरबेस सिंक' : 'Firestore Synced'}</span>
+                </span>
+              )}
             </div>
             <h1 className="text-xl sm:text-2xl font-extrabold text-emerald-950">
               {title}

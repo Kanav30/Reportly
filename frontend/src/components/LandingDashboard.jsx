@@ -1,13 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  UploadCloud, 
-  FileText, 
-  ShieldAlert, 
-  AlertTriangle, 
-  ArrowRight, 
-  Activity, 
-  Sparkles, 
-  ChevronRight, 
+import {
+  UploadCloud,
+  FileText,
+  ShieldAlert,
+  AlertTriangle,
+  ArrowRight,
+  Activity,
+  Sparkles,
+  ChevronRight,
   X,
   FileCheck2
 } from 'lucide-react';
@@ -75,14 +75,14 @@ const LandingDashboard = ({ onUpload, onSelectSample, language = 'en' }) => {
     setErrorMessage('');
 
     // Check MIME type or extension
-    const isSupportedMime = SUPPORTED_TYPES.includes(selectedFile.type) || 
-      selectedFile.type.startsWith('image/') || 
+    const isSupportedMime = SUPPORTED_TYPES.includes(selectedFile.type) ||
+      selectedFile.type.startsWith('image/') ||
       selectedFile.name.toLowerCase().endsWith('.pdf');
 
     if (!isSupportedMime) {
       setErrorMessage(
-        isHindi 
-          ? "कृपया केवल PDF, JPG, PNG या WebP प्रारूप में सीबीसी रिपोर्ट अपलोड करें।" 
+        isHindi
+          ? "कृपया केवल PDF, JPG, PNG या WebP प्रारूप में सीबीसी रिपोर्ट अपलोड करें।"
           : "Unsupported format. Please upload a PDF, JPG, PNG, or WebP laboratory report."
       );
       return;
@@ -92,8 +92,8 @@ const LandingDashboard = ({ onUpload, onSelectSample, language = 'en' }) => {
     if (selectedFile.size > MAX_FILE_SIZE_BYTES) {
       const mbSize = (selectedFile.size / (1024 * 1024)).toFixed(1);
       setErrorMessage(
-        isHindi 
-          ? `फ़ाइल का आकार 15MB की अधिकतम सीमा से अधिक है (${mbSize}MB)। कृपया छोटी फ़ाइल चुनें।` 
+        isHindi
+          ? `फ़ाइल का आकार 15MB की अधिकतम सीमा से अधिक है (${mbSize}MB)। कृपया छोटी फ़ाइल चुनें।`
           : `File size exceeds the 15MB limit (${mbSize}MB). Please select a compressed file.`
       );
       return;
@@ -139,7 +139,7 @@ const LandingDashboard = ({ onUpload, onSelectSample, language = 'en' }) => {
           <Activity className="w-4 h-4 text-emerald-700" />
           <span>{isHindi ? 'प्रॉब्लम स्टेटमेंट T02: रिपोर्ट, डिकोडेड' : 'Problem Statement T02: Report, Decoded'}</span>
         </div>
-        
+
         <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-emerald-950 mb-6 tracking-tight leading-tight">
           {isHindi ? (
             <>मेडिकल रिपोर्ट किसी विदेशी <br className="hidden md:block" /> भाषा जैसी नहीं लगनी चाहिए।</>
@@ -164,8 +164,8 @@ const LandingDashboard = ({ onUpload, onSelectSample, language = 'en' }) => {
                 <AlertTriangle className="w-4 h-4 text-rose-600 flex-shrink-0" />
                 <span>{errorMessage}</span>
               </div>
-              <button 
-                onClick={() => setErrorMessage('')} 
+              <button
+                onClick={() => setErrorMessage('')}
                 className="text-rose-500 hover:text-rose-800 p-1 cursor-pointer"
               >
                 <X className="w-4 h-4" />
@@ -173,10 +173,9 @@ const LandingDashboard = ({ onUpload, onSelectSample, language = 'en' }) => {
             </div>
           )}
 
-          <div 
-            className={`relative bg-white rounded-2xl p-8 sm:p-10 border-2 border-dashed transition-all duration-200 ${
-              dragActive ? 'border-emerald-500 bg-emerald-50 scale-[1.01]' : 'border-emerald-200 hover:border-emerald-300 shadow-sm hover:shadow-md'
-            }`}
+          <div
+            className={`relative bg-white rounded-2xl p-8 sm:p-10 border-2 border-dashed transition-all duration-200 ${dragActive ? 'border-emerald-500 bg-emerald-50 scale-[1.01]' : 'border-emerald-200 hover:border-emerald-300 shadow-sm hover:shadow-md'
+              }`}
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
             onDragOver={handleDrag}
@@ -198,7 +197,7 @@ const LandingDashboard = ({ onUpload, onSelectSample, language = 'en' }) => {
                 <div className="text-[11px] text-emerald-700/60 font-semibold uppercase tracking-wider mt-1">
                   PDF, JPG, PNG, WEBP (Max 15MB • Any Lab Layout)
                 </div>
-                <button 
+                <button
                   onClick={() => fileInputRef.current.click()}
                   className="mt-4 px-7 py-3 bg-emerald-800 hover:bg-emerald-900 text-white rounded-full font-semibold transition-all shadow-sm flex items-center gap-2 active:scale-95 text-sm cursor-pointer"
                 >
@@ -226,7 +225,7 @@ const LandingDashboard = ({ onUpload, onSelectSample, language = 'en' }) => {
 
                     {/* Progress Bar */}
                     <div className="w-full h-2 bg-emerald-200/70 rounded-full overflow-hidden">
-                      <div 
+                      <div
                         className="h-full bg-emerald-700 transition-all duration-500 rounded-full"
                         style={{ width: `${((currentStageIndex + 1) / PROCESSING_STAGES.length) * 100}%` }}
                       />
@@ -235,14 +234,14 @@ const LandingDashboard = ({ onUpload, onSelectSample, language = 'en' }) => {
                 )}
 
                 <div className="flex gap-3 w-full max-w-sm mt-2">
-                  <button 
+                  <button
                     onClick={removeSelectedFile}
                     disabled={loading}
                     className="flex-1 py-2.5 px-4 border border-emerald-200 text-emerald-800 font-semibold rounded-full hover:bg-emerald-50 transition-colors disabled:opacity-50 text-sm cursor-pointer"
                   >
                     {isHindi ? 'बदलें / रद्द करें' : 'Change / Remove'}
                   </button>
-                  <button 
+                  <button
                     onClick={submitFile}
                     disabled={loading}
                     className="flex-1 py-2.5 px-4 bg-emerald-800 hover:bg-emerald-900 text-white font-semibold rounded-full transition-all shadow-sm disabled:opacity-70 flex justify-center items-center gap-2 active:scale-95 text-sm cursor-pointer"
@@ -262,15 +261,15 @@ const LandingDashboard = ({ onUpload, onSelectSample, language = 'en' }) => {
                 </div>
               </div>
             )}
-            <input 
+            <input
               ref={fileInputRef}
-              type="file" 
-              accept=".pdf,.jpg,.jpeg,.png,.webp,image/*,application/pdf" 
-              className="hidden" 
-              onChange={handleChange} 
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.webp,image/*,application/pdf"
+              className="hidden"
+              onChange={handleChange}
             />
           </div>
-          
+
           <div className="flex items-center justify-center gap-2 mt-4 text-xs font-medium text-emerald-800/70">
             <ShieldAlert className="w-3.5 h-3.5 text-emerald-700" />
             <span>{isHindi ? 'सुरक्षित प्रोसेसिंग: अपलोड को कभी भी स्थायी रूप से सार्वजनिक नहीं किया जाता।' : 'Client-first privacy: report files are processed securely in memory without persistent public URLs.'}</span>
@@ -293,16 +292,15 @@ const LandingDashboard = ({ onUpload, onSelectSample, language = 'en' }) => {
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-left">
             {SAMPLE_REPORTS.map((sample) => (
-              <div 
+              <div
                 key={sample.id}
                 onClick={() => onSelectSample(sample)}
                 className="bg-white rounded-xl p-4 border border-emerald-100 hover:border-emerald-400 hover:shadow-md cursor-pointer transition-all group flex flex-col justify-between"
               >
                 <div>
                   <div className="flex items-center justify-between gap-1 mb-2">
-                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                      sample.severity === 'warning' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
-                    }`}>
+                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${sample.severity === 'warning' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                      }`}>
                       {sample.tag[language] || sample.tag.en}
                     </span>
                     <span className="text-[10px] text-slate-400 font-medium">CBC</span>
@@ -336,7 +334,7 @@ const LandingDashboard = ({ onUpload, onSelectSample, language = 'en' }) => {
               {isHindi ? 'हम पैथोलॉजी लैब और मरीज के बीच भाषा की खाई को पाटते हैं।' : 'We bridge the communication gap between pathology labs and patients, equipping you with plain-language insights.'}
             </p>
           </div>
-          
+
           <div className="grid md:grid-cols-3 gap-6 sm:gap-8">
             <div className="bg-[#fafaf9] rounded-2xl p-6 sm:p-7 border border-emerald-100/60 hover:shadow-xs transition-all">
               <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center mb-4 text-emerald-800 font-bold text-lg">
@@ -349,7 +347,7 @@ const LandingDashboard = ({ onUpload, onSelectSample, language = 'en' }) => {
                 {isHindi ? 'किसी भी लैब की फोटो या पीडीएफ अपलोड करें। स्मार्ट एक्सट्रैक्शन पैरामीटर और रेंज को पढ़ लेता है।' : 'Accepts photos or PDFs in any laboratory layout. Automatically extracts test names, numbers, and reference ranges.'}
               </p>
             </div>
-            
+
             <div className="bg-[#fafaf9] rounded-2xl p-6 sm:p-7 border border-emerald-100/60 hover:shadow-xs transition-all">
               <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center mb-4 text-emerald-800 font-bold text-lg">
                 2
@@ -361,7 +359,7 @@ const LandingDashboard = ({ onUpload, onSelectSample, language = 'en' }) => {
                 {isHindi ? 'हाई या लो स्थिति का निर्णय कंप्यूटर नियमों द्वारा होता है, किसी एआई अनुमान से नहीं।' : 'High or Low status is calculated strictly by mathematical rules against laboratory ranges, preventing AI hallucinations.'}
               </p>
             </div>
-            
+
             <div className="bg-[#fafaf9] rounded-2xl p-6 sm:p-7 border border-emerald-100/60 hover:shadow-xs transition-all">
               <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center mb-4 text-emerald-800 font-bold text-lg">
                 3
@@ -382,10 +380,10 @@ const LandingDashboard = ({ onUpload, onSelectSample, language = 'en' }) => {
         <div className="max-w-4xl mx-auto px-4 text-center">
           <AlertTriangle className="w-10 h-10 text-emerald-400 mx-auto mb-4" />
           <h2 className="text-2xl sm:text-3xl font-bold mb-3">
-            {isHindi ? 'हम समझाते हैं। हम कभी बीमारी का निदान नहीं करते।' : 'We simplify. We strictly do not diagnose.'}
+            {isHindi ? 'हम रिपोर्ट को आसान बनाते हैं। हम सभी जानकारियों को आपस में जोड़ते हैं।' : 'We simplify the report. We connect the dots.'}
           </h2>
           <p className="text-sm sm:text-base text-emerald-100/80 leading-relaxed max-w-2xl mx-auto font-normal">
-            {isHindi 
+            {isHindi
               ? 'रिपोर्टली केवल शैक्षिक समझ के लिए है। यह उपचार की सिफारिश नहीं करता। अपने स्वास्थ्य के संबंध में हमेशा अपने डॉक्टर से परामर्श लें।'
               : 'Reportly is an educational tool designed to help you understand medical terminology and ask better questions. It refuses requests for diagnosis and will never recommend treatments.'}
           </p>

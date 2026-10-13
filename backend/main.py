@@ -31,7 +31,8 @@ import uuid
 from classifier import classify_status, normalize_unit, STATUS_WITHIN_RANGE, STATUS_LOW, STATUS_HIGH, STATUS_NEEDS_VERIFICATION, STATUS_UNKNOWN
 from patterns import analyze_patterns_safely
 from ocr_extractor import parse_ocr_blocks, CBC_DEFINITIONS
-from firebase_config import is_firebase_available, save_report_summary, get_report_summary
+from datetime import datetime, timezone
+from firebase_config import db, is_firebase_available, save_report_summary, get_report_summary
 
 app = FastAPI(
     title="Reportly API",
@@ -310,9 +311,11 @@ async def upload_report(
             "is_sample": False
         }
 
-        # Optionally persist to Firebase if configured
+        # Persist to Firebase if configured
+        saved_to_firebase = False
         if is_firebase_available():
-            save_report_summary(report_id, final_data)
+            saved_to_firebase = save_report_summary(report_id, final_data)
+        final_data["saved_to_firebase"] = saved_to_firebase
 
         return final_data
 
@@ -322,6 +325,17 @@ async def upload_report(
                 os.remove(temp_path)
             except Exception:
                 pass
+
+
+@app.get("/api/reports/{report_id}")
+async def get_saved_report(report_id: str):
+    """Retrieves a previously stored report by ID from Firestore."""
+    if not is_firebase_available():
+        raise HTTPException(status_code=503, detail="Firebase persistence is not available.")
+    report = get_report_summary(report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found in database.")
+    return report
 
 
 class AskRequest(BaseModel):

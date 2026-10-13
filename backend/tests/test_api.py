@@ -90,3 +90,25 @@ async def test_ask_guardrail_allows_educational_question():
         assert data["is_emergency"] is False
         assert data["guardrail_triggered"] is None
         assert "Complete Blood Count" in data["message"] or "parameter" in data["message"].lower()
+
+@pytest.mark.asyncio
+async def test_firebase_persistence_endpoints():
+    from firebase_config import is_firebase_available, save_report_summary
+    if is_firebase_available():
+        test_id = "test-e2e-report-id"
+        test_data = {
+            "title": "E2E Test Report",
+            "subtitle": "Test Subtitle",
+            "parameters": [{"name": "Hemoglobin", "value": "14.0", "status": "Within Range"}],
+            "patterns": [],
+            "questions": ["Test Question?"]
+        }
+        saved = save_report_summary(test_id, test_data)
+        assert saved is True
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            res = await client.get(f"/api/reports/{test_id}")
+            assert res.status_code == 200
+            data = res.json()
+            assert data["title"] == "E2E Test Report"
+            assert data["id"] == test_id

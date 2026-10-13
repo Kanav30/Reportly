@@ -12,3 +12,5 @@ frontend/dist-ssr/
 logs
 *.log
 .DS_Store
+# Firebase private credentials
+**/serviceAccountKey.json
