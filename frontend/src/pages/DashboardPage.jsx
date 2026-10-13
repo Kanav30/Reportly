@@ -4,7 +4,6 @@
  * Each user can only see their own reports saved in the DB.
  */
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { API_BASE_URL, API_ENDPOINTS } from '../api/config';
 import Navbar from '../components/Navbar';
@@ -29,12 +28,10 @@ import {
   Edit3,
   MessageSquare,
   X,
-  Sparkles,
 } from 'lucide-react';
 
 const DashboardPage = () => {
   const { currentUser, userProfile, getIdToken, isFirebaseConfigured } = useAuth();
-  const navigate = useNavigate();
 
   const [results, setResults] = useState(null);
   const [language, setLanguage] = useState('en');
@@ -45,6 +42,11 @@ const DashboardPage = () => {
   const [reportsLoading, setReportsLoading] = useState(false);
   const [reportsError, setReportsError] = useState('');
   const [showHistory, setShowHistory] = useState(false);
+
+  const handleSelectSample = (sample) => {
+    setResults(sample);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   /**
    * Fetches this user's private report history from Firestore and backend.
@@ -337,6 +339,7 @@ const DashboardPage = () => {
       {!results ? (
         <LandingDashboard
           onUpload={handleUpload}
+          onSelectSample={handleSelectSample}
           language={language}
         />
       ) : (

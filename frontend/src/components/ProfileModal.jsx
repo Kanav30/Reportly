@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, Phone, Mail, Calendar, ShieldCheck, Check, AlertCircle, Loader2, Sparkles } from 'lucide-react';
+import { X, User, Mail, Check, AlertCircle, Loader2 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 const ProfileModal = ({ isOpen, onClose }) => {

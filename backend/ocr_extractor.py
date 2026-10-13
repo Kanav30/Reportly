@@ -16,127 +16,163 @@ CBC_DEFINITIONS = [
         "key": "WBC",
         "aliases": [r"\bWBC\b", r"\bTOTAL LEUCOCYTE\b", r"\bTOTAL LEUKOCYTE\b", r"\bTLC\b", r"\bWHITE BLOOD CELLS?\b", r"\bWHITE BLOOD COUNT\b"],
         "canonical_name": "Total Leucocyte Count (WBC)",
+        "canonical_name_hi": "कुल ल्यूकोसाइट काउंट (WBC)",
         "canonical_unit": "10^3/µL",
-        "explanation": "White blood cells defend the body against infections and inflammation."
+        "explanation": "White blood cells defend the body against infections and inflammation.",
+        "explanation_hi": "श्वेत रक्त कोशिकाएं शरीर को संक्रमण और सूजन से बचाने में मुख्य भूमिका निभाती हैं।"
     },
     {
         "key": "NEUTRO",
         "aliases": [r"\bNEUTROPHILS?\b", r"\bNEUT\b", r"\bGRANULOCYTES?\b", r"\bGRAN%?\b", r"\bNEUT%?\b"],
         "canonical_name": "Neutrophils / Granulocytes %",
+        "canonical_name_hi": "न्यूट्रोफिल्स / ग्रैनुलोसाइट्स %",
         "canonical_unit": "%",
-        "explanation": "Frontline white blood cells dispatched rapidly to combat bacterial illness and acute inflammation."
+        "explanation": "Frontline white blood cells dispatched rapidly to combat bacterial illness and acute inflammation.",
+        "explanation_hi": "बैक्टीरिया संक्रमण और तीव्र सूजन से लड़ने वाली प्राथमिक श्वेत रक्त कोशिकाएं।"
     },
     {
         "key": "LYMPH",
         "aliases": [r"\bLYMPHOCYTES?\b", r"\bLYMPH%?\b", r"\bLYM%?\b", r"\bLYM\b"],
         "canonical_name": "Lymphocytes %",
+        "canonical_name_hi": "लिम्फोसाइट्स %",
         "canonical_unit": "%",
-        "explanation": "Specialized immune cells that provide targeted viral defense and produce antibodies."
+        "explanation": "Specialized immune cells that provide targeted viral defense and produce antibodies.",
+        "explanation_hi": "वायरल संक्रमणों से बचाव करने और एंटीबॉडी बनाने वाली विशिष्ट प्रतिरक्षा कोशिकाएं।"
     },
     {
         "key": "MONO",
         "aliases": [r"\bMONOCYTES?\b", r"\bMONO%?\b", r"\bMID CELLS?\b", r"\bMID%?\b", r"\bMONO\b"],
         "canonical_name": "Monocytes / Mid Cells %",
+        "canonical_name_hi": "मोनोसाइट्स / मिड सेल्स %",
         "canonical_unit": "%",
-        "explanation": "Intermediate immune cells that clear cellular debris and support long-term defense."
+        "explanation": "Intermediate immune cells that clear cellular debris and support long-term defense.",
+        "explanation_hi": "कोशिकीय मलबे को साफ करने और दीर्घकालिक प्रतिरक्षा में सहायक कोशिकाएं।"
     },
     {
         "key": "EOS",
         "aliases": [r"\bEOSINOPHILS?\b", r"\bEOS%?\b", r"\bEOS\b"],
         "canonical_name": "Eosinophils %",
+        "canonical_name_hi": "इओसिनोफिल्स %",
         "canonical_unit": "%",
-        "explanation": "Immune cells involved in combating parasitic infections and regulating allergic responses."
+        "explanation": "Immune cells involved in combating parasitic infections and regulating allergic responses.",
+        "explanation_hi": "एलर्जी प्रतिक्रियाओं और परजीवी संक्रमणों से निपटने वाली प्रतिरक्षा कोशिकाएं।"
     },
     {
         "key": "BASO",
         "aliases": [r"\bBASOPHILS?\b", r"\bBASO%?\b", r"\bBASO\b"],
         "canonical_name": "Basophils %",
+        "canonical_name_hi": "बेसोफिल्स %",
         "canonical_unit": "%",
-        "explanation": "White blood cells involved in inflammatory and histamine responses."
+        "explanation": "White blood cells involved in inflammatory and histamine responses.",
+        "explanation_hi": "सूजन और हिस्टामाइन प्रतिक्रियाओं से जुड़ी श्वेत रक्त कोशिकाएं।"
     },
     {
         "key": "RBC",
         "aliases": [r"\bRBC\b", r"\bRED BLOOD CELLS?\b", r"\bTOTAL RBC\b", r"\bERYTHROCYTES?\b"],
         "canonical_name": "Red Blood Cell Count (RBC)",
+        "canonical_name_hi": "लाल रक्त कोशिका गणना (RBC)",
         "canonical_unit": "10^6/µL",
-        "explanation": "Specialized disc-shaped cells that transport oxygen from your lungs to tissues."
+        "explanation": "Specialized disc-shaped cells that transport oxygen from your lungs to tissues.",
+        "explanation_hi": "फेफड़ों से शरीर के सभी ऊतकों तक ऑक्सीजन पहुंचाने वाली मुख्य कोशिकाएं।"
     },
     {
         "key": "HGB",
         "aliases": [r"\bHEMOGLOBIN\b", r"\bHAEMOGLOBIN\b", r"\bHGB\b", r"\bHB\b"],
         "canonical_name": "Hemoglobin (HGB)",
+        "canonical_name_hi": "हीमोग्लोबिन (HGB)",
         "canonical_unit": "g/dL",
-        "explanation": "The iron-rich protein in red blood cells that binds oxygen for cellular delivery."
+        "explanation": "The iron-rich protein in red blood cells that binds oxygen for cellular delivery.",
+        "explanation_hi": "लाल रक्त कोशिकाओं में पाया जाने वाला आयरन-युक्त प्रोटीन जो ऑक्सीजन ले जाता है।"
     },
     {
         "key": "HCT",
         "aliases": [r"\bHEMATOCRIT\b", r"\bHAEMATOCRIT\b", r"\bHCT\b", r"\bPCV\b", r"\bPACKED CELL VOLUME\b"],
         "canonical_name": "Hematocrit / PCV (HCT)",
+        "canonical_name_hi": "हेमाटोक्रिट / पीसीवी (HCT)",
         "canonical_unit": "%",
-        "explanation": "The percentage of whole blood volume occupied by red blood cells."
+        "explanation": "The percentage of whole blood volume occupied by red blood cells.",
+        "explanation_hi": "रक्त के कुल आयतन में लाल रक्त कोशिकाओं का प्रतिशत।"
     },
     {
         "key": "MCV",
         "aliases": [r"\bMCV\b", r"\bMEAN CORPUSCULAR VOLUME\b"],
         "canonical_name": "Mean Corpuscular Volume (MCV)",
+        "canonical_name_hi": "औसत लाल कोशिका आयतन (MCV)",
         "canonical_unit": "fL",
-        "explanation": "The average physical size or volume of individual red blood cells."
+        "explanation": "The average physical size or volume of individual red blood cells.",
+        "explanation_hi": "प्रत्येक लाल रक्त कोशिका का औसत आकार या आयतन।"
     },
     {
         "key": "MCH",
         "aliases": [r"\bMCH\b", r"\bMEAN CORPUSCULAR HEMOGLOBIN\b"],
         "canonical_name": "Mean Corpuscular Hemoglobin (MCH)",
+        "canonical_name_hi": "औसत कोशिका हीमोग्लोबिन (MCH)",
         "canonical_unit": "pg",
-        "explanation": "The average mass of hemoglobin contained inside each individual red cell."
+        "explanation": "The average mass of hemoglobin contained inside each individual red cell.",
+        "explanation_hi": "प्रत्येक लाल रक्त कोशिका के भीतर हीमोग्लोबिन की औसत मात्रा।"
     },
     {
         "key": "MCHC",
         "aliases": [r"\bMCHC\b", r"\bMEAN CORPUSCULAR HEMOGLOBIN CONC\b"],
         "canonical_name": "MCHC",
+        "canonical_name_hi": "एम.सी.एच.सी. (MCHC)",
         "canonical_unit": "g/dL",
-        "explanation": "The concentration of hemoglobin relative to packed red blood cell volume."
+        "explanation": "The concentration of hemoglobin relative to packed red blood cell volume.",
+        "explanation_hi": "लाल रक्त कोशिकाओं के भीतर हीमोग्लोबिन की सांद्रता।"
     },
     {
         "key": "RDW",
         "aliases": [r"\bRDW\b", r"\bRDW-CV\b", r"\bRDW-SD\b", r"\bRED CELL DISTRIBUTION WIDTH\b"],
         "canonical_name": "Red Cell Distribution Width (RDW)",
+        "canonical_name_hi": "लाल कोशिका वितरण चौड़ाई (RDW)",
         "canonical_unit": "%",
-        "explanation": "A measurement of variation in red blood cell volume and size (anisocytosis)."
+        "explanation": "A measurement of variation in red blood cell volume and size (anisocytosis).",
+        "explanation_hi": "लाल रक्त कोशिकाओं के आकार और आयतन में भिन्नता की माप।"
     },
     {
         "key": "PLT",
         "aliases": [r"\bPLATELET COUNT\b", r"\bPLATELETS?\b", r"\bPLT\b", r"\bTHROMBOCYTES?\b"],
         "canonical_name": "Platelet Count (PLT)",
+        "canonical_name_hi": "प्लेटलेट काउंट (PLT)",
         "canonical_unit": "10^3/µL",
-        "explanation": "Cell fragments vital for blood clot formation and vascular wound sealing."
+        "explanation": "Cell fragments vital for blood clot formation and vascular wound sealing.",
+        "explanation_hi": "रक्त का थक्का जमाने और रक्तस्राव रोकने के लिए आवश्यक रक्त कणिकाएं।"
     },
     {
         "key": "MPV",
         "aliases": [r"\bMPV\b", r"\bMEAN PLATELET VOLUME\b"],
         "canonical_name": "Mean Platelet Volume (MPV)",
+        "canonical_name_hi": "औसत प्लेटलेट आयतन (MPV)",
         "canonical_unit": "fL",
-        "explanation": "The average physical size of circulating platelets in the bloodstream."
+        "explanation": "The average physical size of circulating platelets in the bloodstream.",
+        "explanation_hi": "रक्तप्रवाह में घूमने वाले प्लेटलेट्स का औसत आकार।"
     },
     {
         "key": "PCT",
         "aliases": [r"\bPCT\b", r"\bPLATELETCRIT\b"],
         "canonical_name": "Plateletcrit (PCT)",
+        "canonical_name_hi": "प्लेटलेटक्रिट (PCT)",
         "canonical_unit": "%",
-        "explanation": "The total volume percentage occupied by platelets in blood volume."
+        "explanation": "The total volume percentage occupied by platelets in blood volume.",
+        "explanation_hi": "रक्त में प्लेटलेट्स द्वारा घेरा गया कुल आयतन प्रतिशत।"
     },
     {
         "key": "TYPHOID",
         "aliases": [r"\bTYPHOID\b", r"\bSALMONELLA TYPHI\b", r"\bWIDAL\b", r"\bTYPHIDOT\b"],
         "canonical_name": "Typhoid Serology",
+        "canonical_name_hi": "टाइफाइड सीरोलॉजी (Widal / Rapid)",
         "canonical_unit": "Card Test",
-        "explanation": "Serological evaluation for antibodies reactive to Salmonella Typhi bacteria."
+        "explanation": "Serological evaluation for antibodies reactive to Salmonella Typhi bacteria.",
+        "explanation_hi": "साल्मोनेला टाइफी बैक्टीरिया के खिलाफ एंटीबॉडी की उपस्थिति जांच।"
     },
     {
         "key": "MALARIA",
         "aliases": [r"\bMALARIA\b", r"\bPLASMODIUM\b", r"\bMALARIAL PARASITE\b"],
         "canonical_name": "Malaria Screen",
+        "canonical_name_hi": "मलेरिया जांच (रैपिड कार्ड)",
         "canonical_unit": "Card Test",
-        "explanation": "Screening for plasmodium malaria parasites in whole blood."
+        "explanation": "Screening for plasmodium malaria parasites in whole blood.",
+        "explanation_hi": "रक्त में प्लास्मोडियम मलेरिया परजीवी की प्राथमिक जांच।"
     }
 ]
 
@@ -286,6 +322,7 @@ def parse_ocr_blocks(ocr_results: List[Any]) -> Dict[str, Any]:
 
                 param_entry = {
                     "name": defn["canonical_name"],
+                    "name_hi": defn.get("canonical_name_hi", defn["canonical_name"]),
                     "value": str(val),
                     "unit": extracted_unit,
                     "range": rstring or (f"{rmin} - {rmax}" if (rmin is not None and rmax is not None) else "Not Specified"),
@@ -293,7 +330,10 @@ def parse_ocr_blocks(ocr_results: List[Any]) -> Dict[str, Any]:
                     "range_max": rmax,
                     "status": classification["status"],
                     "status_code": classification["status_code"],
-                    "explanation": defn["explanation"],
+                    "explanation": {
+                        "en": defn["explanation"],
+                        "hi": defn.get("explanation_hi", defn["explanation"])
+                    },
                     "evidence_trace": {
                         "source_text": combined_window.strip(),
                         "ocr_confidence": round(min_conf, 3),

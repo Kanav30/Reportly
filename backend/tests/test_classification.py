@@ -107,3 +107,15 @@ def test_unit_normalization():
     assert normalize_unit("10^3/ul") == "10^3/µL"
     assert normalize_unit("fl") == "fL"
     assert normalize_unit("pg") == "pg"
+
+
+def test_scale_normalization_1000x():
+    """Platelets given as 250,000 against a 150 - 450 range should normalize to within range."""
+    res = classify_status(250000, range_min=150, range_max=450, test_name="Platelet Count")
+    assert res["status"] == STATUS_WITHIN_RANGE
+    assert "normalized from count to 10^3/µL" in res["reason"]
+
+    # Platelets given as 100,000 against a 150 - 450 range should normalize to Low
+    res_low = classify_status(100000, range_min=150, range_max=450, test_name="Platelet Count")
+    assert res_low["status"] == STATUS_LOW
+

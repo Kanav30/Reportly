@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Activity, ShieldCheck, Key, History, LogOut, User, ChevronDown } from 'lucide-react';
+import { Activity, ShieldCheck, History, LogOut, User, ChevronDown } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 const UserMenu = ({ userProfile, currentUser, onLogout, onOpenProfile }) => {

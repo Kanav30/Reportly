@@ -8,8 +8,7 @@ import {
   Activity,
   X,
   FileCheck2,
-  Sparkles,
-  MessageSquare
+  Sparkles
 } from 'lucide-react';
 import AskReportlyGuardrail from './AskReportlyGuardrail';
 

@@ -6,7 +6,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { auth, isFirebaseConfigured } from '../firebase/firebase';
-import { Activity, Mail, AlertCircle, CheckCircle2, ArrowLeft, AlertTriangle } from 'lucide-react';
+import { Activity, Mail, AlertCircle, CheckCircle2, ArrowLeft } from 'lucide-react';
 
 const FIREBASE_ERROR_MESSAGES = {
   'auth/invalid-email': 'The email address format is invalid.',

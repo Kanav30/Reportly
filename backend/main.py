@@ -19,7 +19,6 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any, Union
 import google.generativeai as genai
-from rapidocr_onnxruntime import RapidOCR
 from PIL import Image
 import os
 from pathlib import Path
@@ -80,12 +79,83 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------------------------
-# Engines and constants
+# Engines and constants (Lazy-loaded to guarantee zero import-time crashes)
 # ---------------------------------------------------------------------------
-ocr_engine = RapidOCR()
+_ocr_engine = None
+
+def get_ocr_engine():
+    global _ocr_engine
+    if _ocr_engine is None:
+        try:
+            from rapidocr_onnxruntime import RapidOCR
+            _ocr_engine = RapidOCR()
+        except Exception as e:
+            print(f"RapidOCR lazy-initialization notice: {e}")
+            _ocr_engine = None
+    return _ocr_engine
+
 DEFAULT_API_KEY = os.environ.get("GOOGLE_API_KEY", "")
 MAX_UPLOAD_SIZE = 15 * 1024 * 1024  # 15 MB
 SUPPORTED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".webp"}
+
+MAGIC_BYTES = {
+    ".pdf": [b"%PDF-"],
+    ".png": [b"\x89PNG\r\n\x1a\n"],
+    ".jpg": [b"\xff\xd8\xff"],
+    ".jpeg": [b"\xff\xd8\xff"],
+    ".webp": [b"RIFF"],
+}
+
+def validate_magic_bytes(header: bytes, ext: str) -> bool:
+    """Validates file magic-byte headers against claimed extension to block spoofed binaries."""
+    signatures = MAGIC_BYTES.get(ext.lower(), [])
+    if not signatures:
+        return True
+    return any(header.startswith(sig) for sig in signatures)
+
+def anonymize_patient_name(name: Optional[str]) -> str:
+    """Masks patient names to protect privacy (e.g. 'Kanav Mathur' -> 'K. M.')."""
+    if not name or str(name).strip().lower() in ["patient", "unknown", "n/a", "none", ""]:
+        return "Patient"
+    parts = str(name).strip().split()
+    if len(parts) == 1:
+        return f"{parts[0][0].upper()}."
+    return f"{parts[0][0].upper()}. {parts[-1][0].upper()}."
+
+NON_CBC_PANEL_KEYWORDS = [
+    "total cholesterol", "triglyceride", "hdl cholesterol", "ldl cholesterol",
+    "lipid profile", "liver function", "bilirubin", "sgot", "sgpt", "alt", "ast",
+    "kidney function", "renal function", "serum creatinine", "blood urea",
+    "thyroid", "tsh", "total t3", "total t4", "free t3", "free t4",
+    "hba1c", "fasting blood sugar", "post prandial blood sugar", "urinalysis"
+]
+
+def detect_unsupported_panel(text: str) -> Optional[str]:
+    """Detects when an uploaded document contains non-CBC tests with zero CBC markers."""
+    t_lower = text.lower()
+    for kw in NON_CBC_PANEL_KEYWORDS:
+        if kw in t_lower:
+            return kw
+    return None
+
+DIAGNOSTIC_OUTPUT_PATTERNS = [
+    r"\byou have (?:acute|chronic|severe)?\s*(?:leukemia|cancer|anemia|infection|thrombocytopenia)\b",
+    r"\bprescribe\b",
+    r"\btake \d+\s*(?:mg|ml|tablets?|capsules?)\b",
+    r"\bdosage:\s*\d+\b",
+]
+
+def sanitize_ai_output(text: str) -> str:
+    """Guarantees LLM text never returns definitive diagnoses or drug dosages."""
+    t_clean = text
+    for pat in DIAGNOSTIC_OUTPUT_PATTERNS:
+        if re.search(pat, t_clean, re.IGNORECASE):
+            return (
+                "Educational Note: Reportly provides educational lab explanations and refuses "
+                "to provide medical diagnoses or medication dosages. Please discuss these numbers "
+                "with your physician."
+            )
+    return t_clean
 
 # ---------------------------------------------------------------------------
 # Authentication dependency
@@ -357,15 +427,18 @@ async def upload_report(
             detail=f"Unsupported file type '{ext}'. Please upload a CBC report as a PDF, JPG, PNG, or WebP document."
         )
 
-    # 2. Buffer file and validate size
+    # 2. Buffer file and validate size & magic bytes
     suffix = ext if ext else ".jpg"
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
         file_size = 0
         chunk_size = 1024 * 1024  # 1 MB chunks
+        header_sample = b""
         while True:
             chunk = await file.read(chunk_size)
             if not chunk:
                 break
+            if not header_sample:
+                header_sample = chunk[:16]
             file_size += len(chunk)
             if file_size > MAX_UPLOAD_SIZE:
                 temp_file.close()
@@ -382,14 +455,25 @@ async def upload_report(
             os.remove(temp_path)
         raise HTTPException(status_code=400, detail="The uploaded file is empty. Please select a valid document.")
 
+    if not validate_magic_bytes(header_sample, ext):
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        raise HTTPException(
+            status_code=400,
+            detail=f"File signature does not match the '{ext}' extension. Please upload a genuine CBC document."
+        )
+
+    temp_rendered_files = []
     try:
         report_id = str(uuid.uuid4())
         parameters = []
         patient_metadata = {"name": "Patient", "age": "N/A", "gender": "N/A", "lab_name": "Decoded Lab Report", "date": ""}
         extraction_source = "RapidOCR Engine"
+        raw_detected_text = ""
 
         # PATH 1: Gemini Multimodal Vision API (if API key available)
         if active_key:
+            uploaded_media = None
             try:
                 genai.configure(api_key=active_key)
                 vision_model = genai.GenerativeModel("gemini-flash-latest")
@@ -397,12 +481,8 @@ async def upload_report(
                 uploaded_media = genai.upload_file(path=temp_path)
                 response = vision_model.generate_content([uploaded_media, GEMINI_VISION_PROMPT])
 
-                try:
-                    uploaded_media.delete()
-                except Exception:
-                    pass
-
                 response_text = response.text.strip()
+                raw_detected_text = response_text
                 if response_text.startswith("```json"):
                     response_text = response_text.replace("```json", "").replace("```", "").strip()
                 elif response_text.startswith("```"):
@@ -453,9 +533,16 @@ async def upload_report(
                 extraction_source = "Gemini Vision with Deterministic Rule Validation"
             except Exception as gemini_err:
                 print(f"Gemini API attempt error: {gemini_err}. Falling back to RapidOCR.")
+            finally:
+                if uploaded_media:
+                    try:
+                        uploaded_media.delete()
+                    except Exception:
+                        pass
 
         # PATH 2: Local RapidOCR Engine (fallback)
         if not parameters:
+            engine = get_ocr_engine()
             ocr_results = None
             if ext == ".pdf":
                 try:
@@ -467,12 +554,12 @@ async def upload_report(
                         page = pdf[page_idx]
                         pil_img = page.render(scale=2).to_pil()
                         page_path = f"{temp_path}_page{page_idx}.png"
+                        temp_rendered_files.append(page_path)
                         pil_img.save(page_path, "PNG")
-                        page_results, _ = ocr_engine(page_path)
-                        if page_results:
-                            ocr_results.extend(page_results)
-                        if os.path.exists(page_path):
-                            os.remove(page_path)
+                        if engine:
+                            page_results, _ = engine(page_path)
+                            if page_results:
+                                ocr_results.extend(page_results)
                 except Exception as pdfium_err:
                     print(f"pypdfium2 conversion error: {pdfium_err}")
 
@@ -482,29 +569,48 @@ async def upload_report(
                         images = convert_from_path(temp_path, first_page=1, last_page=1)
                         if images:
                             page_path = temp_path + "_page1.png"
+                            temp_rendered_files.append(page_path)
                             images[0].save(page_path, "PNG")
-                            ocr_results, _ = ocr_engine(page_path)
-                            if os.path.exists(page_path):
-                                os.remove(page_path)
+                            if engine:
+                                ocr_results, _ = engine(page_path)
                     except Exception as pdf_err:
                         print(f"pdf2image conversion error: {pdf_err}. Attempting direct file read.")
 
-            if not ocr_results:
+            if not ocr_results and engine:
                 try:
-                    ocr_results, _ = ocr_engine(temp_path)
+                    ocr_results, _ = engine(temp_path)
                 except Exception as direct_ocr_err:
                     print(f"Direct OCR error: {direct_ocr_err}")
 
             if ocr_results:
                 parsed_ocr = parse_ocr_blocks(ocr_results)
                 parameters = parsed_ocr.get("parameters", [])
+                raw_detected_text = parsed_ocr.get("full_text", "")
                 extraction_source = "Local RapidOCR Engine with Deterministic Rules"
 
         if not parameters:
+            unsupported_panel = detect_unsupported_panel(raw_detected_text)
+            if unsupported_panel:
+                return {
+                    "error": "Unsupported laboratory panel detected.",
+                    "message": (
+                        f"The uploaded document contains non-CBC markers ({unsupported_panel.title()}). "
+                        "Reportly is strictly specialized for Complete Blood Count (CBC) panels. "
+                        "Please upload a standard CBC report."
+                    )
+                }
             return {
                 "error": "Could not extract laboratory parameters from the uploaded document.",
                 "message": "Please ensure the image or PDF is clear, well-lit, and contains a standard CBC laboratory panel."
             }
+
+        # Sanitize AI outputs in parameter explanations
+        for p in parameters:
+            if "explanation" in p:
+                if isinstance(p["explanation"], str):
+                    p["explanation"] = sanitize_ai_output(p["explanation"])
+                elif isinstance(p["explanation"], dict):
+                    p["explanation"]["en"] = sanitize_ai_output(p["explanation"].get("en", ""))
 
         # Analyze patterns
         patterns = analyze_patterns_safely(parameters)
@@ -519,7 +625,8 @@ async def upload_report(
 
         summary_counts = calculate_report_summary(parameters)
 
-        p_name = patient_metadata.get("name") or "Patient"
+        # Privacy-preserving PII anonymization (e.g. 'Kanav Mathur' -> 'K. M.')
+        p_name = anonymize_patient_name(patient_metadata.get("name"))
         p_lab = patient_metadata.get("lab_name") or "CBC Laboratory Panel"
         p_age = patient_metadata.get("age", "N/A")
         p_gender = patient_metadata.get("gender", "N/A")
@@ -557,6 +664,13 @@ async def upload_report(
         return final_data
 
     finally:
+        await file.close()
+        for p_path in temp_rendered_files:
+            if os.path.exists(p_path):
+                try:
+                    os.remove(p_path)
+                except Exception:
+                    pass
         if os.path.exists(temp_path):
             try:
                 os.remove(temp_path)

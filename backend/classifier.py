@@ -225,38 +225,51 @@ def classify_status(
             "comparison_math": f"Invalid bounds: lower ({p_min}) > upper ({p_max})"
         }
 
+    # 6B. Detect and adjust 1000x scale mismatches (e.g. Platelets 150,000 against 150-450 range)
+    adjusted_val = val_num
+    scale_note = ""
+    is_cell_count = bool(test_name and any(term in str(test_name).upper() for term in ["PLATELET", "PLT", "WBC", "LEUCOCYTE", "LEUKOCYTE", "TLC"]))
+    
+    if is_cell_count and p_max is not None and p_max > 0:
+        if val_num > 100 * p_max and p_max <= 1000:
+            adjusted_val = val_num / 1000.0
+            scale_note = f" (normalized from count to 10^3/µL: {val_num} -> {adjusted_val})"
+        elif p_min is not None and p_min >= 1000 and val_num < (p_min / 100):
+            adjusted_val = val_num * 1000.0
+            scale_note = f" (normalized from 10^3/µL to count: {val_num} -> {adjusted_val})"
+
     # 7. Exact deterministic mathematical comparison
     # Precision epsilon for floating point boundary equality
     EPS = 1e-6
 
     # Lower bound check
-    if p_min is not None and val_num < (p_min - EPS):
+    if p_min is not None and adjusted_val < (p_min - EPS):
         return {
             "status": STATUS_LOW,
             "status_code": "BELOW_RANGE",
-            "reason": f"Value {val_num} is below the lower reference limit of {p_min}.",
+            "reason": f"Value {val_num}{scale_note} is below the lower reference limit of {p_min}.",
             "parsed_value": val_num,
             "parsed_min": p_min,
             "parsed_max": p_max,
             "is_numeric": True,
             "needs_verification": False,
             "unit_validated": bool(unit),
-            "comparison_math": f"{val_num} < {p_min} (Lower Limit)"
+            "comparison_math": f"{adjusted_val} < {p_min} (Lower Limit)"
         }
 
     # Upper bound check
-    if p_max is not None and val_num > (p_max + EPS):
+    if p_max is not None and adjusted_val > (p_max + EPS):
         return {
             "status": STATUS_HIGH,
             "status_code": "ABOVE_RANGE",
-            "reason": f"Value {val_num} is above the upper reference limit of {p_max}.",
+            "reason": f"Value {val_num}{scale_note} is above the upper reference limit of {p_max}.",
             "parsed_value": val_num,
             "parsed_min": p_min,
             "parsed_max": p_max,
             "is_numeric": True,
             "needs_verification": False,
             "unit_validated": bool(unit),
-            "comparison_math": f"{val_num} > {p_max} (Upper Limit)"
+            "comparison_math": f"{adjusted_val} > {p_max} (Upper Limit)"
         }
 
     # Within bounds check (inclusive: p_min <= val <= p_max)
@@ -264,12 +277,12 @@ def classify_status(
     return {
         "status": STATUS_WITHIN_RANGE,
         "status_code": "WITHIN_RANGE",
-        "reason": f"Value {val_num} is within the laboratory reference interval of {range_desc}.",
+        "reason": f"Value {val_num}{scale_note} is within the laboratory reference interval of {range_desc}.",
         "parsed_value": val_num,
         "parsed_min": p_min,
         "parsed_max": p_max,
         "is_numeric": True,
         "needs_verification": False,
         "unit_validated": bool(unit),
-        "comparison_math": f"{p_min if p_min is not None else '-inf'} <= {val_num} <= {p_max if p_max is not None else '+inf'}"
+        "comparison_math": f"{p_min if p_min is not None else '-inf'} <= {adjusted_val} <= {p_max if p_max is not None else '+inf'}"
     }

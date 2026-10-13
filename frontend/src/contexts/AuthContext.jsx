@@ -17,7 +17,6 @@ import {
   auth,
   isFirebaseConfigured,
   getUserProfileFromFirestore,
-  saveUserProfileToFirestore,
 } from '../firebase/firebase';
 import { API_BASE_URL } from '../api/config';
 

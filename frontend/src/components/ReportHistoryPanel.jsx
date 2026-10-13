@@ -5,7 +5,7 @@
 import React from 'react';
 import {
   X, RefreshCw, FileText, Clock, AlertTriangle,
-  CheckCircle2, TrendingUp, Loader2, Inbox,
+  Loader2, Inbox,
 } from 'lucide-react';
 
 const STATUS_BADGE = {

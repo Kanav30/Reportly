@@ -6,9 +6,9 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth, isFirebaseConfigured, saveUserProfileToFirestore } from '../firebase/firebase';
+import { auth, isFirebaseConfigured } from '../firebase/firebase';
 import { API_BASE_URL } from '../api/config';
-import { Activity, Eye, EyeOff, AlertCircle, UserPlus, CheckCircle2, AlertTriangle, ArrowRight, Phone, User, Calendar } from 'lucide-react';
+import { Activity, Eye, EyeOff, AlertCircle, UserPlus, CheckCircle2, AlertTriangle, ArrowRight } from 'lucide-react';
 
 
 
