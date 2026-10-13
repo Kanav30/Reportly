@@ -3,6 +3,7 @@ import Navbar from './components/Navbar';
 import LandingDashboard from './components/LandingDashboard';
 import ResultsDashboard from './components/ResultsDashboard';
 import ApiKeyModal from './components/ApiKeyModal';
+import { API_ENDPOINTS } from './api/config';
 import './index.css';
 
 function App() {
@@ -29,11 +30,23 @@ function App() {
     }
 
     try {
-      const response = await fetch('http://localhost:8000/api/upload', {
+      const response = await fetch(API_ENDPOINTS.UPLOAD, {
         method: 'POST',
         headers: headers,
         body: formData,
       });
+
+      if (!response.ok) {
+        let errMessage = `Server error (${response.status})`;
+        try {
+          const errData = await response.json();
+          errMessage = errData.detail || errData.message || errData.error || errMessage;
+        } catch {
+          // Response body was not JSON
+        }
+        throw new Error(errMessage);
+      }
+
       const data = await response.json();
       
       if (data.error) {
@@ -41,9 +54,11 @@ function App() {
       }
       
       setResults(data);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (error) {
       console.error('Error uploading file:', error);
-      alert(error.message || 'Error processing report. Please try a sample report or check your API key.');
+      alert(error.message || 'Error processing report. Please check your document or try one of the instant sample reports.');
+      throw error;
     }
   };
 
